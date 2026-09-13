@@ -1,0 +1,425 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #0f1311;
+    background-image: 
+      radial-gradient(ellipse at 50% 0%, rgba(35, 48, 38, 0.4) 0%, transparent 75%),
+      radial-gradient(circle at 100% 100%, rgba(20, 26, 22, 0.6) 0%, transparent 60%),
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+    color: #e5dec9;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
+  }
+}
+
+/* Custom scrollbar for tactical war-room feel */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111613;
+  border-left: 1px solid #1f2821;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2e3b31;
+  border: 1px solid #455749;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #546a59;
+}
+
+/* War Room Heavy Brass Header with Rivets & Bevel */
+.brass-header-heavy {
+  background: linear-gradient(180deg, #2b332d 0%, #1e2520 40%, #141916 100%);
+  border-bottom: 2px solid #a38237;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 230, 160, 0.25);
+  position: relative;
+}
+
+.brass-header-heavy::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #d8b153 25%, #ffd978 50%, #d8b153 75%, transparent 100%);
+  opacity: 0.6;
+}
+
+/* Brass and military tactical borders */
+.tactical-border {
+  border: 1px solid #334035;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 3px 8px rgba(0, 0, 0, 0.5);
+}
+
+.tactical-panel {
+  background: linear-gradient(180deg, #1b231d 0%, #131915 100%);
+  border: 1px solid #2d3b31;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* Stamped seals (Top Secret, Approved, Completed) */
+.stamp-top-secret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ef4444;
+  border: 2px solid #ef4444;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-family: monospace;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  padding: 2px 8px;
+  transform: rotate(-5deg);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.3), inset 0 0 6px rgba(239, 68, 68, 0.15);
+  text-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+  user-select: none;
+}
+
+.stamp-gold-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f7df94;
+  border: 1.5px solid #c9a84d;
+  border-radius: 2px;
+  text-transform: uppercase;
+  font-family: monospace;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  background: rgba(201, 168, 77, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 8px rgba(201, 168, 77, 0.25);
+}
+
+.stamp-active-war {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #4ade80;
+  border: 1.5px solid #22c55e;
+  border-radius: 2px;
+  font-family: monospace;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  background: rgba(34, 197, 94, 0.12);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+}
+
+/* Screw / Rivet head dot */
+.screw-rivet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #718096 0%, #2d3748 70%, #1a202c 100%);
+  border: 1px solid #1a202c;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+}
+
+/* Dossier Weathered Paper effect */
+.dossier-card {
+  background: linear-gradient(180deg, #1d2520 0%, #161c18 100%);
+  border: 1px solid #334237;
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 4px 14px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+.dossier-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #8a7337 0%, #d8b153 30%, #8a7337 100%);
+  opacity: 0.7;
+}
+
+/* Metallic gold gradient text */
+.gold-gradient-text {
+  background: linear-gradient(180deg, #fff2c4 0%, #d8b153 50%, #997327 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.8));
+}
+
+/* Radar pulse animation for active focus nodes */
+@keyframes radar-pulse-border {
+  0% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.4), inset 0 0 6px rgba(74, 222, 128, 0.2);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(74, 222, 128, 0), inset 0 0 12px rgba(74, 222, 128, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0), inset 0 0 6px rgba(74, 222, 128, 0.2);
+  }
+}
+
+.animate-radar-pulse {
+  animation: radar-pulse-border 2.5s infinite;
+}
+
+/* Metallic Gold Medallion Completed Node */
+.node-plaque-completed {
+  background: linear-gradient(180deg, #242116 0%, #17150d 50%, #100e08 100%);
+  border: 1.5px solid #d4af37;
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 235, 160, 0.35),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6),
+    0 4px 16px rgba(0, 0, 0, 0.7),
+    0 0 12px rgba(212, 175, 55, 0.25);
+}
+
+/* Tactical Active Battle Order Node */
+.node-plaque-active {
+  background: linear-gradient(180deg, #18261c 0%, #111a14 50%, #0d140f 100%);
+  border: 1.5px solid #22c55e;
+  box-shadow: 
+    inset 0 1px 0 rgba(134, 239, 172, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.7),
+    0 0 14px rgba(34, 197, 94, 0.25);
+}
+
+/* Paused / Resting Strategy Node */
+.node-plaque-paused {
+  background: linear-gradient(180deg, #242017 0%, #1a1711 100%);
+  border: 1.5px dashed #b45309;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+}
+
+/* Revoked / Voided Node */
+.node-plaque-revoked {
+  background: linear-gradient(180deg, #1f1717 0%, #140f0f 100%);
+  border: 1.5px solid #7f1d1d;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  opacity: 0.78;
+}
+
+/* Tactical War-Room Grid Background for Canvas */
+.war-room-canvas-grid {
+  background-color: #0b0e0c;
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(26, 36, 29, 0.8) 0%, rgba(11, 14, 12, 0.98) 100%),
+    linear-gradient(rgba(138, 115, 55, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(138, 115, 55, 0.08) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 160px 160px, 160px 160px, 32px 32px, 32px 32px;
+}
+
+/* Tactile Stamp Slam Animation (解压式实体印章重击反馈) */
+@keyframes stamp-slam {
+  0% {
+    transform: scale(2.8) rotate(-24deg);
+    opacity: 0;
+  }
+  65% {
+    transform: scale(0.92) rotate(-6deg);
+    opacity: 1;
+  }
+  85% {
+    transform: scale(1.05) rotate(-5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-6deg);
+    opacity: 1;
+  }
+}
+
+.animate-stamp-slam {
+  animation: stamp-slam 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  display: inline-block;
+  transform-origin: center center;
+}
+
+/* =========================================================================
+   PHYSICAL SKEUOMORPHIC STYLES (MATCHING WAR ROOM CONCEPT ART)
+   ========================================================================= */
+
+/* 1. Manila Folder & Aged Document Paper */
+.manila-paper {
+  background-color: #dfd4be;
+  background-image:
+    radial-gradient(ellipse at 15% 25%, rgba(255, 252, 245, 0.6) 0%, transparent 60%),
+    radial-gradient(circle at 85% 75%, rgba(185, 155, 115, 0.35) 0%, transparent 50%),
+    linear-gradient(180deg, #ede3cb 0%, #dbccaa 60%, #cebe97 100%);
+  border: 1px solid #b3a078;
+  box-shadow:
+    inset 0 0 30px rgba(110, 80, 30, 0.2),
+    0 8px 24px rgba(0, 0, 0, 0.7);
+  color: #2b2318;
+}
+
+.manila-folder-tab {
+  background: linear-gradient(180deg, #f3ebd7 0%, #dfd3b6 100%);
+  border-top: 2px solid #caa965;
+  border-left: 2px solid #b89753;
+  border-right: 2px solid #8f702e;
+  border-radius: 8px 22px 0 0;
+  box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.45);
+  color: #2b2318;
+}
+
+/* 2. Tactical War-Room Parchment Map (Canvas Background) */
+.parchment-map {
+  background-color: #b9ad95;
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(235, 226, 208, 0.95) 0%, rgba(178, 164, 137, 0.98) 100%),
+    radial-gradient(circle at 85% 15%, rgba(135, 110, 75, 0.3) 0%, transparent 45%),
+    linear-gradient(rgba(110, 90, 60, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(110, 90, 60, 0.15) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 72px 72px, 72px 72px;
+  box-shadow: inset 0 0 100px rgba(50, 35, 15, 0.55);
+}
+
+/* 3. Heavy Brushed Brass Console */
+.brushed-brass-console {
+  background: linear-gradient(180deg, #d8ba78 0%, #b89347 25%, #886526 60%, #baa05e 85%, #6a4c17 100%);
+  border: 2px solid #4a3712;
+  box-shadow:
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.7),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.7),
+    0 6px 20px rgba(0, 0, 0, 0.85);
+}
+
+.brass-recessed-chassis {
+  background: linear-gradient(180deg, #181d1a 0%, #111512 100%);
+  border: 2px solid #2e3b32;
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.85), 0 2px 4px rgba(255, 255, 255, 0.05);
+}
+
+/* 4. Industrial Metal Tabs */
+.btn-console-tab-active {
+  background: linear-gradient(180deg, #edd28c 0%, #cfa847 45%, #926f28 100%);
+  border: 1.5px solid #fff0a8;
+  border-bottom: 2px solid #573f11;
+  box-shadow: inset 0 1px 2px #fff, 0 3px 8px rgba(0, 0, 0, 0.7);
+  color: #1a150b;
+  font-weight: 800;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.btn-console-tab-inactive {
+  background: linear-gradient(180deg, #242c26 0%, #171d19 100%);
+  border: 1px solid #334036;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.7);
+  color: #8c9e91;
+}
+
+.btn-console-tab-inactive:hover {
+  background: linear-gradient(180deg, #2f3a32 0%, #1f2722 100%);
+  color: #d1ded5;
+}
+
+/* 5. 3D Embossed Hexagonal Medallions */
+.medallion-badge-gold {
+  background: radial-gradient(circle at 35% 35%, #fff2be 0%, #e1b957 40%, #9e7525 80%, #684a14 100%);
+  box-shadow: 
+    0 8px 18px rgba(0, 0, 0, 0.7),
+    inset 0 2px 4px rgba(255, 255, 255, 0.75),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.8);
+  border: 2px solid #523b12;
+}
+
+.medallion-badge-bronze {
+  background: radial-gradient(circle at 35% 35%, #d6c098 0%, #a4824e 45%, #6a4f25 85%, #423012 100%);
+  box-shadow: 
+    0 6px 14px rgba(0, 0, 0, 0.7),
+    inset 0 2px 3px rgba(255, 255, 255, 0.6),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.8);
+  border: 2px solid #3d2b0e;
+}
+
+.medallion-badge-emerald {
+  background: radial-gradient(circle at 35% 35%, #9ef0b5 0%, #22c55e 45%, #15803d 85%, #0d4621 100%);
+  box-shadow: 
+    0 6px 16px rgba(0, 0, 0, 0.7),
+    inset 0 2px 3px rgba(255, 255, 255, 0.7),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.8);
+  border: 2px solid #14532d;
+}
+
+/* Hanging Grosgrain Ribbon */
+.grosgrain-ribbon-red {
+  background: linear-gradient(90deg, 
+    #7f1d1d 0%, #991b1b 30%, 
+    #eab308 35%, #ca8a04 50%, #eab308 65%, 
+    #991b1b 70%, #7f1d1d 100%
+  );
+  box-shadow: 0 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.4);
+  border: 1px solid #450a0a;
+}
+
+.grosgrain-ribbon-emerald {
+  background: linear-gradient(90deg, 
+    #14532d 0%, #16a34a 30%, 
+    #fef08a 35%, #eab308 50%, #fef08a 65%, 
+    #16a34a 70%, #14532d 100%
+  );
+  box-shadow: 0 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.4);
+  border: 1px solid #064e3b;
+}
+
+/* 6. Distressed Red Stamp */
+.distressed-stamp-red {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #991b1b;
+  border: 2.5px dashed #991b1b;
+  font-family: monospace;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  transform: rotate(-7deg);
+  background: rgba(185, 28, 28, 0.04);
+  box-shadow: 0 0 1px #991b1b;
+  text-shadow: 0 0 1px rgba(153, 27, 27, 0.7);
+  user-select: none;
+}
+
+/* 7. Analog Dial Meter Casing */
+.analog-dial-casing {
+  background: radial-gradient(circle at 50% 50%, #f7f1e1 0%, #e4d6be 65%, #baa583 100%);
+  border: 3.5px solid #b89347;
+  box-shadow: 
+    inset 0 3px 6px rgba(0,0,0,0.5),
+    0 4px 12px rgba(0,0,0,0.8),
+    inset 0 -1.5px 2px rgba(255,255,255,0.85);
+  position: relative;
+}
+
+.analog-dial-glass {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.05) 50%, transparent 100%);
+  pointer-events: none;
+}
+
+/* 8. Connection Ball-Joint Pins */
+.ball-joint-pin {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff5c8 0%, #cfa847 60%, #684a14 100%);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+  border: 0.5px solid #4a3510;
+}
+
+
