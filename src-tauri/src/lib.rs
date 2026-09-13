@@ -2,9 +2,11 @@ pub mod db;
 pub mod models;
 pub mod repositories;
 pub mod commands;
+pub mod llm;
 
 use db::DbState;
 use repositories::Repository;
+use std::sync::Arc;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -19,11 +21,27 @@ pub fn run() {
                 )?;
             }
 
-            // 获取或创建应用持久化存储目录
-            let app_data_dir = app
-                .path()
-                .app_data_dir()
-                .unwrap_or_else(|_| std::env::current_dir().unwrap().join("life_strategy_data"));
+            // 真正的绿色便携存储模式支持 (§P1-PKG-04 & 用户指令 4)
+            // 优先级：
+            // 1. 命令行 --portable 参数
+            // 2. exe 同级存在 portable.flag 文件或 data 目录
+            // 3. 默认系统应用数据目录 (%LOCALAPPDATA%/...)
+            let is_portable_flag = std::env::args().any(|a| a == "--portable");
+            let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf()));
+            let has_local_marker = exe_dir.as_ref().is_some_and(|d| {
+                d.join("portable.flag").exists() || d.join("data").is_dir()
+            });
+
+            let app_data_dir = if is_portable_flag || has_local_marker {
+                let base = exe_dir.unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                let p = base.join("data");
+                log::info!("⚡ 启用纯净便携模式 (Portable Mode)，数据存储目录: {:?}", p);
+                p
+            } else {
+                app.path()
+                    .app_data_dir()
+                    .unwrap_or_else(|_| std::env::current_dir().unwrap().join("life_strategy_data"))
+            };
 
             std::fs::create_dir_all(&app_data_dir).expect("failed to create app data directory");
             log::info!("Database and storage directory: {:?}", app_data_dir);
@@ -41,6 +59,9 @@ pub fn run() {
                 }
             }
 
+            // 初始化安全 LLM 凭据存储与代理状态 (§P0-SEC-01 & §P0-SEC-02)
+            let key_store = Arc::new(llm::KeyStore::new(&app_data_dir));
+            app.manage(llm::LlmState { key_store });
             app.manage(db_state);
 
             Ok(())
@@ -63,12 +84,6 @@ pub fn run() {
             commands::add_focus_relation,
             commands::delete_focus_relation,
             commands::get_focus_history,
-            commands::get_decisions,
-            commands::create_decision,
-            commands::record_decision_occurrence,
-            commands::void_decision_occurrence,
-            commands::decrement_decision_occurrence,
-            commands::update_decision_status,
             commands::get_leader,
             commands::update_leader,
             commands::get_situation,
@@ -118,7 +133,12 @@ pub fn run() {
             commands::update_ideology,
             commands::delete_ideology,
             commands::update_national_spirit,
-            commands::delete_national_spirit
+            commands::delete_national_spirit,
+            llm::llm_get_config,
+            llm::llm_save_config,
+            llm::llm_clear_key,
+            llm::llm_chat,
+            llm::llm_test_connection
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

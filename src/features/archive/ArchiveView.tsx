@@ -223,7 +223,7 @@ export const ArchiveView: React.FC<ArchiveViewProps> = ({ lifeId, onWriteEssay, 
                               body_md: item.summary,
                               kind: 'super',
                               occurred_on: item.occurred_at.slice(0, 10),
-                              quote: '重大人生命运转折，由此开启新的历史篇章。',
+                              quote: item.extra_badge && item.extra_badge !== '超事件' ? item.extra_badge : undefined,
                               created_at: item.occurred_at,
                               updated_at: item.occurred_at,
                             });

@@ -24,6 +24,7 @@ export interface Trait {
   title: string;
   body_md: string;
   icon?: string | null;
+  equip_state?: string | null;
   archived_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -134,31 +135,6 @@ export interface FocusStatusHistory {
   source_id?: string | null;
 }
 
-export interface Decision {
-  id: string;
-  life_id: string;
-  title: string;
-  body_md: string;
-  category?: string | null;
-  kind: 'one_off' | 'repeatable';
-  status: 'open' | 'completed' | 'abandoned';
-  target_time?: string | null;
-  occurrence_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface DecisionOccurrence {
-  id: string;
-  life_id: string;
-  decision_id: string;
-  occurred_at: string;
-  recorded_at: string;
-  note?: string | null;
-  voided_at?: string | null;
-  void_reason?: string | null;
-}
-
 export interface Event {
   id: string;
   life_id: string;
@@ -212,7 +188,6 @@ export interface WorldOverview {
   ideologies: Ideology[];
   national_spirits: NationalSpirit[];
   active_foci: Focus[];
-  open_decisions: Decision[];
   recent_events: Event[];
 }
 

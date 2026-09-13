@@ -6,6 +6,7 @@ import { StabilityModal } from './components/StabilityModal';
 import { SettingsModal } from './components/SettingsModal';
 import { EssayModal } from './components/EssayModal';
 import { DashboardView } from './features/dashboard/DashboardView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
 
 // Code-split heavy feature views to reduce initial bundle size (§16 启动加速)
@@ -14,7 +15,6 @@ const LeaderView = React.lazy(() => import('./features/leader/LeaderView').then(
 const CabinetView = React.lazy(() => import('./features/cabinet/CabinetView').then(m => ({ default: m.CabinetView })));
 const IdeologyPhilosophyView = React.lazy(() => import('./features/ideology/IdeologyPhilosophyView').then(m => ({ default: m.IdeologyPhilosophyView })));
 const NationalSpiritView = React.lazy(() => import('./features/spirit/NationalSpiritView').then(m => ({ default: m.NationalSpiritView })));
-const DecisionView = React.lazy(() => import('./features/decisions/DecisionView').then(m => ({ default: m.DecisionView })));
 const ArchiveView = React.lazy(() => import('./features/archive/ArchiveView').then(m => ({ default: m.ArchiveView })));
 const SnapshotsView = React.lazy(() => import('./features/snapshots/SnapshotsView').then(m => ({ default: m.SnapshotsView })));
 
@@ -40,6 +40,9 @@ export const App: React.FC = () => {
   const [showEssayModal, setShowEssayModal] = useState(false);
   const [editingEssay, setEditingEssay] = useState<Essay | null>(null);
 
+  // 竞态防护：记录最新生效的人生空间 ID，避免快切覆盖
+  const currentLifeIdRef = React.useRef<string | null>(null);
+
   // 初始化加载人生空间列表
   const initApp = useCallback(async () => {
     try {
@@ -62,17 +65,24 @@ export const App: React.FC = () => {
   }, []);
 
   const loadLifeData = async (lifeId: string) => {
+    currentLifeIdRef.current = lifeId;
     try {
       const [overviewData, stabData, essaysData] = await Promise.all([
         api.getWorldOverview(lifeId),
         api.getStability(lifeId),
         api.getEssays(lifeId),
       ]);
+      // 竞态守卫：若用户已快速切至其他人生，丢弃过期响应
+      if (currentLifeIdRef.current !== lifeId) {
+        return;
+      }
       setOverview(overviewData);
       setStability(stabData);
       setEssays(essaysData);
     } catch (err) {
-      console.error('Failed to load life overview', err);
+      if (currentLifeIdRef.current === lifeId) {
+        console.error('Failed to load life overview', err);
+      }
     }
   };
 
@@ -171,47 +181,50 @@ export const App: React.FC = () => {
         onSelectTab={setActiveTab}
       />
 
-      {/* Main Feature Content View */}
+      {/* Main Feature Content View with Isolated Error Containment */}
       <main className="flex-1 overflow-hidden relative">
-        {activeTab === 'dashboard' && overview && (
-          <DashboardView
-            overview={overview}
-            onNavigateTab={setActiveTab}
-            onOpenStabilityModal={() => setShowStabilityModal(true)}
-            essays={essays}
-            onWriteEssay={handleOpenWriteEssay}
-            onEditEssay={handleEditEssay}
-          />
-        )}
-
-        <Suspense fallback={<LazyFallback />}>
-          {activeTab === 'focus' && <FocusCanvasView lifeId={currentLife.id} />}
-
-          {activeTab === 'leader' && <LeaderView lifeId={currentLife.id} />}
-
-          {activeTab === 'cabinet' && (
-            <CabinetView
-              lifeId={currentLife.id}
-              onOpenSettings={() => setShowSettingsModal(true)}
-            />
-          )}
-
-          {activeTab === 'ideology_philosophy' && <IdeologyPhilosophyView lifeId={currentLife.id} />}
-
-          {activeTab === 'spirit' && <NationalSpiritView lifeId={currentLife.id} />}
-
-          {activeTab === 'decisions' && <DecisionView lifeId={currentLife.id} />}
-
-          {activeTab === 'archive' && (
-            <ArchiveView
-              lifeId={currentLife.id}
+        <ErrorBoundary
+          key={`${currentLife.id}-${activeTab}`}
+          onReset={() => loadLifeData(currentLife.id)}
+        >
+          {activeTab === 'dashboard' && overview && (
+            <DashboardView
+              overview={overview}
+              onNavigateTab={setActiveTab}
+              onOpenStabilityModal={() => setShowStabilityModal(true)}
+              essays={essays}
               onWriteEssay={handleOpenWriteEssay}
               onEditEssay={handleEditEssay}
             />
           )}
 
-          {activeTab === 'snapshots' && <SnapshotsView lifeId={currentLife.id} />}
-        </Suspense>
+          <Suspense fallback={<LazyFallback />}>
+            {activeTab === 'focus' && <FocusCanvasView lifeId={currentLife.id} />}
+
+            {activeTab === 'leader' && <LeaderView lifeId={currentLife.id} />}
+
+            {activeTab === 'cabinet' && (
+              <CabinetView
+                lifeId={currentLife.id}
+                onOpenSettings={() => setShowSettingsModal(true)}
+              />
+            )}
+
+            {activeTab === 'ideology_philosophy' && <IdeologyPhilosophyView lifeId={currentLife.id} />}
+
+            {activeTab === 'spirit' && <NationalSpiritView lifeId={currentLife.id} />}
+
+            {activeTab === 'archive' && (
+              <ArchiveView
+                lifeId={currentLife.id}
+                onWriteEssay={handleOpenWriteEssay}
+                onEditEssay={handleEditEssay}
+              />
+            )}
+
+            {activeTab === 'snapshots' && <SnapshotsView lifeId={currentLife.id} />}
+          </Suspense>
+        </ErrorBoundary>
       </main>
 
       {/* Essay Modal */}

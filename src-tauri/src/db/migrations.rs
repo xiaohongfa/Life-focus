@@ -1,4 +1,5 @@
 use rusqlite::{Connection, Result};
+use sha2::{Digest, Sha256};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -19,7 +20,28 @@ pub static MIGRATIONS: &[Migration] = &[
         name: "002_sub_focus",
         sql: include_str!("../../migrations/002_sub_focus.sql"),
     },
+    Migration {
+        version: 3,
+        name: "003_integrity_hardening",
+        sql: include_str!("../../migrations/003_integrity_hardening.sql"),
+    },
 ];
+
+fn compute_sha256(content: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(content.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+fn compute_legacy_hash(content: &str) -> String {
+    let mut hasher = DefaultHasher::new();
+    content.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
+}
+
+fn custom_err(msg: impl Into<String>) -> rusqlite::Error {
+    rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(msg.into())))
+}
 
 pub fn run_migrations(conn: &mut Connection) -> Result<()> {
     conn.execute_batch(
@@ -37,18 +59,35 @@ pub fn run_migrations(conn: &mut Connection) -> Result<()> {
             stmt.query_row([migration.version], |row| row.get(0)).ok()
         };
 
-        let mut hasher = DefaultHasher::new();
-        migration.sql.hash(&mut hasher);
-        let current_checksum = format!("{:x}", hasher.finish());
+        let sha256_checksum = compute_sha256(migration.sql);
 
         if let Some(existing_checksum) = existing {
-            if existing_checksum != current_checksum {
-                log::warn!(
-                    "Migration {} checksum mismatch (applied: {}, current: {})",
+            if existing_checksum == sha256_checksum {
+                // Checksum verified
+                continue;
+            }
+
+            // Check if existing checksum was computed using legacy DefaultHasher
+            let legacy_checksum = compute_legacy_hash(migration.sql);
+            if existing_checksum == legacy_checksum {
+                log::info!(
+                    "Migrating migration {} checksum from legacy DefaultHasher ({}) to SHA-256 ({})",
                     migration.name,
-                    existing_checksum,
-                    current_checksum
+                    legacy_checksum,
+                    sha256_checksum
                 );
+                conn.execute(
+                    "UPDATE _migrations SET checksum = ?1 WHERE version = ?2",
+                    rusqlite::params![sha256_checksum, migration.version],
+                )?;
+            } else {
+                // Tampering / corruption detected! Fail fast!
+                let err_msg = format!(
+                    "Migration {} checksum mismatch (applied: {}, expected SHA-256: {})",
+                    migration.name, existing_checksum, sha256_checksum
+                );
+                log::error!("{}", err_msg);
+                return Err(custom_err(err_msg));
             }
         } else {
             log::info!("Applying migration {} (v{})", migration.name, migration.version);
@@ -56,7 +95,7 @@ pub fn run_migrations(conn: &mut Connection) -> Result<()> {
             tx.execute_batch(migration.sql)?;
             tx.execute(
                 "INSERT INTO _migrations (version, name, applied_at, checksum) VALUES (?1, ?2, datetime('now'), ?3)",
-                rusqlite::params![migration.version, migration.name, current_checksum],
+                rusqlite::params![migration.version, migration.name, sha256_checksum],
             )?;
             tx.commit()?;
             log::info!("Migration {} applied successfully", migration.name);

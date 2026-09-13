@@ -13,8 +13,6 @@ import type {
   Focus,
   FocusRelation,
   FocusStatusHistory,
-  Decision,
-  DecisionOccurrence,
   Event,
   Essay,
   ArchiveItem,
@@ -131,33 +129,6 @@ export const api = {
   getFocusHistory: (lifeId: string, focusId?: string) =>
     tauriInvoke<FocusStatusHistory[]>('get_focus_history', { lifeId, focusId }),
 
-  // Decisions
-  getDecisions: (lifeId: string) => tauriInvoke<Decision[]>('get_decisions', { lifeId }),
-  createDecision: (
-    lifeId: string,
-    title: string,
-    bodyMd: string,
-    kind: 'one_off' | 'repeatable',
-    category?: string,
-    targetTime?: string
-  ) =>
-    tauriInvoke<Decision>('create_decision', {
-      lifeId,
-      title,
-      bodyMd,
-      category,
-      kind,
-      targetTime,
-    }),
-  recordDecisionOccurrence: (lifeId: string, decisionId: string, note?: string) =>
-    tauriInvoke<DecisionOccurrence>('record_decision_occurrence', { lifeId, decisionId, note }),
-  voidDecisionOccurrence: (lifeId: string, occurrenceId: string, voidReason?: string) =>
-    tauriInvoke<void>('void_decision_occurrence', { lifeId, occurrenceId, voidReason }),
-  decrementDecisionOccurrence: (lifeId: string, decisionId: string) =>
-    tauriInvoke<void>('decrement_decision_occurrence', { lifeId, decisionId }),
-  updateDecisionStatus: (lifeId: string, decisionId: string, newStatus: string, reason?: string) =>
-    tauriInvoke<void>('update_decision_status', { lifeId, decisionId, newStatus, reason }),
-
   // World objects
   getLeader: (lifeId: string) => tauriInvoke<Leader | null>('get_leader', { lifeId }),
   updateLeader: (lifeId: string, name: string, bodyMd: string, portraitAttachmentId?: string) =>
@@ -234,10 +205,10 @@ export const api = {
   getEssays: (lifeId: string) => tauriInvoke<Essay[]>('get_essays', { lifeId }),
   createEssay: (lifeId: string, title: string, bodyMd: string) =>
     tauriInvoke<Essay>('create_essay', { lifeId, title, bodyMd }),
-  updateEssay: (_lifeId: string, id: string, title: string, bodyMd: string) =>
-    tauriInvoke<Essay>('update_essay', { id, title, bodyMd }),
-  deleteEssay: (_lifeId: string, id: string) =>
-    tauriInvoke<void>('delete_essay', { id }),
+  updateEssay: (lifeId: string, id: string, title: string, bodyMd: string) =>
+    tauriInvoke<Essay>('update_essay', { lifeId, id, title, bodyMd }),
+  deleteEssay: (lifeId: string, id: string) =>
+    tauriInvoke<void>('delete_essay', { lifeId, id }),
 
   // Archive & Snapshots
   getArchiveFeed: (lifeId: string, filterType?: string) =>
@@ -300,7 +271,6 @@ const mockData: {
   lives: Life[];
   foci: Focus[];
   relations: FocusRelation[];
-  decisions: Decision[];
   traits: Trait[];
   traitRelations: TraitRelation[];
   spirits: NationalSpirit[];
@@ -333,7 +303,6 @@ const mockData: {
     { id: 'rel-6', life_id: 'mock-life-1', source_focus_id: 'focus-3', target_focus_id: 'focus-7', relation_type: 'prerequisite' },
     { id: 'rel-7', life_id: 'mock-life-1', source_focus_id: 'focus-5', target_focus_id: 'focus-8', relation_type: 'prerequisite' },
   ],
-  decisions: [],
   traits: [
     { id: 'trait-1', life_id: 'mock-life-1', title: '本质思考 1阶', body_md: '第一性原理拆解核心逻辑，专注归纳本质公理', icon: undefined, archived_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
     { id: 'trait-2', life_id: 'mock-life-1', title: '反脆弱进化 2阶', body_md: '在波动与挫败中沉淀经验，持续构建第二曲线', icon: 'active', archived_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
@@ -469,7 +438,6 @@ function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
       ideologies: mockData.ideologies.filter((i) => i.life_id === lifeId),
       national_spirits: mockData.spirits.filter((s) => s.life_id === lifeId),
       active_foci: mockData.foci.filter((f) => f.life_id === lifeId && f.status === 'active'),
-      open_decisions: mockData.decisions.filter((d) => d.life_id === lifeId && d.status === 'open'),
       recent_events: mockData.events.filter((e) => e.life_id === lifeId),
     } as T;
   }
@@ -610,67 +578,6 @@ function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
   if (cmd === 'get_focus_history') {
     return [] as T;
-  }
-  if (cmd === 'get_decisions') {
-    const lifeId = args?.lifeId as string;
-    return mockData.decisions.filter((d) => d.life_id === lifeId) as T;
-  }
-  if (cmd === 'create_decision') {
-    const d: Decision = {
-      id: `dec-${Date.now()}`,
-      life_id: args?.lifeId as string,
-      title: args?.title as string,
-      body_md: (args?.bodyMd as string) || '',
-      kind: (args?.kind as 'one_off' | 'repeatable') || 'one_off',
-      status: 'open',
-      category: args?.category as string,
-      occurrence_count: 0,
-      created_at: now,
-      updated_at: now,
-    };
-    mockData.decisions.push(d);
-    return d as T;
-  }
-  if (cmd === 'record_decision_occurrence') {
-    const decisionId = args?.decisionId as string;
-    const dec = mockData.decisions.find((d) => d.id === decisionId);
-    if (dec) {
-      dec.occurrence_count = (dec.occurrence_count || 0) + 1;
-      if (dec.kind === 'one_off') {
-        dec.status = 'completed';
-      }
-      dec.updated_at = now;
-    }
-    return {
-      id: `occ-${Date.now()}`,
-      life_id: args?.lifeId as string,
-      decision_id: decisionId,
-      occurred_at: now,
-      recorded_at: now,
-      note: args?.note as string | undefined,
-      voided_at: null,
-      void_reason: null,
-    } as unknown as T;
-  }
-  if (cmd === 'void_decision_occurrence' || cmd === 'decrement_decision_occurrence') {
-    const decisionId = args?.decisionId as string;
-    const dec = mockData.decisions.find((d) => d.id === decisionId);
-    if (dec && dec.occurrence_count > 0) {
-      dec.occurrence_count -= 1;
-      if (dec.kind === 'one_off' && dec.status === 'completed') {
-        dec.status = 'open';
-      }
-      dec.updated_at = now;
-    }
-    return undefined as unknown as T;
-  }
-  if (cmd === 'update_decision_status') {
-    const dec = mockData.decisions.find((d) => d.id === args?.decisionId);
-    if (dec) {
-      dec.status = args?.newStatus as any;
-      dec.updated_at = now;
-    }
-    return undefined as unknown as T;
   }
   if (cmd === 'get_traits') {
     const lifeId = args?.lifeId as string;

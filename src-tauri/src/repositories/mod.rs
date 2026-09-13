@@ -2,6 +2,10 @@ use rusqlite::{params, Connection, Result};
 use uuid::Uuid;
 use crate::models::*;
 
+fn custom_err(msg: impl Into<String>) -> rusqlite::Error {
+    rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(msg.into())))
+}
+
 pub struct Repository;
 
 impl Repository {
@@ -374,18 +378,88 @@ impl Repository {
         relation_type: &str,
         note: Option<&str>,
     ) -> Result<FocusRelation> {
+        if source_id == target_id {
+            return Err(custom_err("Focus relation cannot connect a node to itself"));
+        }
+
+        let valid: bool = conn.query_row(
+            "SELECT (SELECT COUNT(*) FROM focus WHERE id = ?1 AND life_id = ?3) = 1 AND (SELECT COUNT(*) FROM focus WHERE id = ?2 AND life_id = ?3) = 1",
+            params![source_id, target_id, life_id],
+            |row| row.get(0),
+        )?;
+        if !valid {
+            return Err(custom_err("Source and target focus nodes must belong to the specified life_id"));
+        }
+
+        let (eff_source, eff_target) = if relation_type == "mutually_exclusive" {
+            if source_id < target_id {
+                (source_id, target_id)
+            } else {
+                (target_id, source_id)
+            }
+        } else {
+            (source_id, target_id)
+        };
+
+        if relation_type == "prerequisite" {
+            let mut visited = std::collections::HashSet::new();
+            let mut queue = std::collections::VecDeque::new();
+            queue.push_back(eff_target.to_string());
+            visited.insert(eff_target.to_string());
+
+            let mut stmt = conn.prepare(
+                "SELECT target_focus_id FROM focus_relation WHERE life_id = ?1 AND relation_type = 'prerequisite' AND source_focus_id = ?2",
+            )?;
+
+            let mut has_cycle = false;
+            while let Some(curr) = queue.pop_front() {
+                if curr == eff_source {
+                    has_cycle = true;
+                    break;
+                }
+                let next_nodes = stmt.query_map(params![life_id, curr], |r| r.get::<_, String>(0))?;
+                for next in next_nodes {
+                    let n = next?;
+                    if !visited.contains(&n) {
+                        visited.insert(n.clone());
+                        queue.push_back(n);
+                    }
+                }
+            }
+
+            if has_cycle {
+                return Err(custom_err("Cannot add prerequisite relation: would create a circular dependency cycle"));
+            }
+        }
+
+        let existing: Option<String> = conn.query_row(
+            "SELECT id FROM focus_relation WHERE life_id = ?1 AND source_focus_id = ?2 AND target_focus_id = ?3 AND relation_type = ?4",
+            params![life_id, eff_source, eff_target, relation_type],
+            |row| row.get(0),
+        ).ok();
+        if let Some(existing_id) = existing {
+            return Ok(FocusRelation {
+                id: existing_id,
+                life_id: life_id.to_string(),
+                source_focus_id: eff_source.to_string(),
+                target_focus_id: eff_target.to_string(),
+                relation_type: relation_type.to_string(),
+                note: note.map(String::from),
+            });
+        }
+
         let rel_id = Uuid::new_v4().to_string();
         conn.execute(
             "INSERT INTO focus_relation (id, life_id, source_focus_id, target_focus_id, relation_type, note)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![rel_id, life_id, source_id, target_id, relation_type, note],
+            params![rel_id, life_id, eff_source, eff_target, relation_type, note],
         )?;
 
         Ok(FocusRelation {
             id: rel_id,
             life_id: life_id.to_string(),
-            source_focus_id: source_id.to_string(),
-            target_focus_id: target_id.to_string(),
+            source_focus_id: eff_source.to_string(),
+            target_focus_id: eff_target.to_string(),
             relation_type: relation_type.to_string(),
             note: note.map(String::from),
         })
@@ -441,248 +515,6 @@ impl Repository {
             })?;
             rows.collect()
         }
-    }
-
-    // ==================== DECISION REPOSITORY ====================
-    pub fn get_decisions(conn: &Connection, life_id: &str) -> Result<Vec<Decision>> {
-        let mut stmt = conn.prepare(
-            "SELECT d.id, d.title, d.body_md, d.category, d.kind, d.status, d.target_time, d.created_at, d.updated_at,
-                    COUNT(o.id) as occurrence_count
-             FROM decision d
-             LEFT JOIN decision_occurrence o ON o.decision_id = d.id AND o.voided_at IS NULL
-             WHERE d.life_id = ?1
-             GROUP BY d.id
-             ORDER BY d.created_at DESC",
-        )?;
-        let rows = stmt.query_map([life_id], |row| {
-            Ok(Decision {
-                id: row.get(0)?,
-                life_id: life_id.to_string(),
-                title: row.get(1)?,
-                body_md: row.get(2)?,
-                category: row.get(3)?,
-                kind: row.get(4)?,
-                status: row.get(5)?,
-                target_time: row.get(6)?,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
-                occurrence_count: row.get(9)?,
-            })
-        })?;
-        rows.collect()
-    }
-
-    pub fn create_decision(
-        conn: &Connection,
-        life_id: &str,
-        title: &str,
-        body_md: &str,
-        category: Option<&str>,
-        kind: &str,
-        target_time: Option<&str>,
-    ) -> Result<Decision> {
-        let decision_id = Uuid::new_v4().to_string();
-        let now = chrono::Utc::now().to_rfc3339();
-
-        conn.execute(
-            "INSERT INTO decision (id, life_id, title, body_md, category, kind, status, target_time, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'open', ?7, ?8, ?8)",
-            params![decision_id, life_id, title, body_md, category, kind, target_time, now],
-        )?;
-
-        Ok(Decision {
-            id: decision_id,
-            life_id: life_id.to_string(),
-            title: title.to_string(),
-            body_md: body_md.to_string(),
-            category: category.map(String::from),
-            kind: kind.to_string(),
-            status: "open".to_string(),
-            target_time: target_time.map(String::from),
-            occurrence_count: 0,
-            created_at: now.clone(),
-            updated_at: now,
-        })
-    }
-
-    pub fn record_decision_occurrence(
-        conn: &mut Connection,
-        life_id: &str,
-        decision_id: &str,
-        note: Option<&str>,
-    ) -> Result<DecisionOccurrence> {
-        let occ_id = Uuid::new_v4().to_string();
-        let now = chrono::Utc::now().to_rfc3339();
-
-        let tx = conn.transaction()?;
-
-        let kind: String = tx.query_row(
-            "SELECT kind FROM decision WHERE id = ?1 AND life_id = ?2",
-            params![decision_id, life_id],
-            |row| row.get(0),
-        )?;
-
-        tx.execute(
-            "INSERT INTO decision_occurrence (id, life_id, decision_id, occurred_at, recorded_at, note)
-             VALUES (?1, ?2, ?3, ?4, ?4, ?5)",
-            params![occ_id, life_id, decision_id, now, note],
-        )?;
-
-        // 一次性决议完成即闭环为 completed；重复决议仍保持 open
-        if kind == "one_off" {
-            tx.execute(
-                "UPDATE decision SET status = 'completed', updated_at = ?1 WHERE id = ?2 AND life_id = ?3",
-                params![now, decision_id, life_id],
-            )?;
-
-            let hist_id = Uuid::new_v4().to_string();
-            tx.execute(
-                "INSERT INTO decision_status_history (id, life_id, decision_id, from_status, to_status, occurred_at, recorded_at, reason)
-                 VALUES (?1, ?2, ?3, 'open', 'completed', ?4, ?4, '完成决议')",
-                params![hist_id, life_id, decision_id, now],
-            )?;
-        }
-
-        tx.commit()?;
-
-        Ok(DecisionOccurrence {
-            id: occ_id,
-            life_id: life_id.to_string(),
-            decision_id: decision_id.to_string(),
-            occurred_at: now.clone(),
-            recorded_at: now,
-            note: note.map(String::from),
-            voided_at: None,
-            void_reason: None,
-        })
-    }
-
-    pub fn void_decision_occurrence(
-        conn: &mut Connection,
-        life_id: &str,
-        occurrence_id: &str,
-        void_reason: Option<&str>,
-    ) -> Result<()> {
-        let now = chrono::Utc::now().to_rfc3339();
-        let tx = conn.transaction()?;
-
-        let (decision_id,): (String,) = tx.query_row(
-            "SELECT decision_id FROM decision_occurrence WHERE id = ?1 AND life_id = ?2",
-            params![occurrence_id, life_id],
-            |row| Ok((row.get(0)?,)),
-        )?;
-
-        let (kind, status): (String, String) = tx.query_row(
-            "SELECT kind, status FROM decision WHERE id = ?1 AND life_id = ?2",
-            params![decision_id, life_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
-
-        tx.execute(
-            "UPDATE decision_occurrence SET voided_at = ?1, void_reason = ?2 WHERE id = ?3 AND life_id = ?4",
-            params![now, void_reason, occurrence_id, life_id],
-        )?;
-
-        // 如果是一次性且之前标记为 completed，作废后恢复为 open
-        if kind == "one_off" && status == "completed" {
-            tx.execute(
-                "UPDATE decision SET status = 'open', updated_at = ?1 WHERE id = ?2 AND life_id = ?3",
-                params![now, decision_id, life_id],
-            )?;
-            let hist_id = Uuid::new_v4().to_string();
-            tx.execute(
-                "INSERT INTO decision_status_history (id, life_id, decision_id, from_status, to_status, occurred_at, recorded_at, reason)
-                 VALUES (?1, ?2, ?3, 'completed', 'open', ?4, ?4, '作废完成记录并恢复可执行')",
-                params![hist_id, life_id, decision_id, now],
-            )?;
-        }
-
-        tx.commit()?;
-        Ok(())
-    }
-
-    pub fn decrement_decision_occurrence(
-        conn: &mut Connection,
-        life_id: &str,
-        decision_id: &str,
-    ) -> Result<()> {
-        let now = chrono::Utc::now().to_rfc3339();
-        let tx = conn.transaction()?;
-
-        let mut stmt = tx.prepare(
-            "SELECT id FROM decision_occurrence WHERE decision_id = ?1 AND life_id = ?2 AND voided_at IS NULL ORDER BY occurred_at DESC LIMIT 1",
-        )?;
-        let mut rows = stmt.query(params![decision_id, life_id])?;
-        let latest_occ_id: Option<String> = if let Some(row) = rows.next()? {
-            Some(row.get(0)?)
-        } else {
-            None
-        };
-        drop(rows);
-        drop(stmt);
-
-        if let Some(occ_id) = latest_occ_id {
-            tx.execute(
-                "UPDATE decision_occurrence SET voided_at = ?1, void_reason = ?2 WHERE id = ?3 AND life_id = ?4",
-                params![now, "统帅手动回退/扣减打卡", occ_id, life_id],
-            )?;
-
-            let (kind, status): (String, String) = tx.query_row(
-                "SELECT kind, status FROM decision WHERE id = ?1 AND life_id = ?2",
-                params![decision_id, life_id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )?;
-
-            if kind == "one_off" && status == "completed" {
-                tx.execute(
-                    "UPDATE decision SET status = 'open', updated_at = ?1 WHERE id = ?2 AND life_id = ?3",
-                    params![now, decision_id, life_id],
-                )?;
-                let hist_id = Uuid::new_v4().to_string();
-                tx.execute(
-                    "INSERT INTO decision_status_history (id, life_id, decision_id, from_status, to_status, occurred_at, recorded_at, reason)
-                     VALUES (?1, ?2, ?3, 'completed', 'open', ?4, ?4, '回退打卡并恢复待执行')",
-                    params![hist_id, life_id, decision_id, now],
-                )?;
-            }
-        }
-
-        tx.commit()?;
-        Ok(())
-    }
-
-    pub fn update_decision_status(
-        conn: &mut Connection,
-        life_id: &str,
-        decision_id: &str,
-        new_status: &str,
-        reason: Option<&str>,
-    ) -> Result<()> {
-        let now = chrono::Utc::now().to_rfc3339();
-        let tx = conn.transaction()?;
-
-        let current_status: String = tx.query_row(
-            "SELECT status FROM decision WHERE id = ?1 AND life_id = ?2",
-            params![decision_id, life_id],
-            |row| row.get(0),
-        )?;
-
-        if current_status != new_status {
-            tx.execute(
-                "UPDATE decision SET status = ?1, updated_at = ?2 WHERE id = ?3 AND life_id = ?4",
-                params![new_status, now, decision_id, life_id],
-            )?;
-
-            let hist_id = Uuid::new_v4().to_string();
-            tx.execute(
-                "INSERT INTO decision_status_history (id, life_id, decision_id, from_status, to_status, occurred_at, recorded_at, reason)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7)",
-                params![hist_id, life_id, decision_id, current_status, new_status, now, reason],
-            )?;
-        }
-
-        tx.commit()?;
-        Ok(())
     }
 
     // ==================== WORLD OBJECTS REPOSITORY ====================
@@ -776,9 +608,9 @@ impl Repository {
 
     pub fn get_traits(conn: &Connection, life_id: &str, include_archived: bool) -> Result<Vec<Trait>> {
         let sql = if include_archived {
-            "SELECT id, title, body_md, icon, archived_at, created_at, updated_at FROM trait WHERE life_id = ?1 ORDER BY created_at ASC"
+            "SELECT id, title, body_md, icon, archived_at, created_at, updated_at, equip_state FROM trait WHERE life_id = ?1 ORDER BY created_at ASC"
         } else {
-            "SELECT id, title, body_md, icon, archived_at, created_at, updated_at FROM trait WHERE life_id = ?1 AND archived_at IS NULL ORDER BY created_at ASC"
+            "SELECT id, title, body_md, icon, archived_at, created_at, updated_at, equip_state FROM trait WHERE life_id = ?1 AND archived_at IS NULL ORDER BY created_at ASC"
         };
         let mut stmt = conn.prepare(sql)?;
         let rows = stmt.query_map([life_id], |row| {
@@ -791,6 +623,7 @@ impl Repository {
                 archived_at: row.get(4)?,
                 created_at: row.get(5)?,
                 updated_at: row.get(6)?,
+                equip_state: row.get(7)?,
             })
         })?;
         rows.collect()
@@ -800,8 +633,8 @@ impl Repository {
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
-            "INSERT INTO trait (id, life_id, title, body_md, icon, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+            "INSERT INTO trait (id, life_id, title, body_md, icon, equip_state, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'unequipped', ?6, ?6)",
             params![id, life_id, title, body_md, icon, now],
         )?;
         Ok(Trait {
@@ -810,6 +643,7 @@ impl Repository {
             title: title.to_string(),
             body_md: body_md.to_string(),
             icon: icon.map(String::from),
+            equip_state: Some("unequipped".to_string()),
             archived_at: None,
             created_at: now.clone(),
             updated_at: now,
@@ -823,7 +657,7 @@ impl Repository {
             params![title, body_md, icon, now, trait_id, life_id],
         )?;
         let mut stmt = conn.prepare(
-            "SELECT id, title, body_md, icon, archived_at, created_at, updated_at FROM trait WHERE id = ?1 AND life_id = ?2",
+            "SELECT id, title, body_md, icon, archived_at, created_at, updated_at, equip_state FROM trait WHERE id = ?1 AND life_id = ?2",
         )?;
         let mut rows = stmt.query_map([trait_id, life_id], |row| {
             Ok(Trait {
@@ -835,6 +669,7 @@ impl Repository {
                 archived_at: row.get(4)?,
                 created_at: row.get(5)?,
                 updated_at: row.get(6)?,
+                equip_state: row.get(7)?,
             })
         })?;
         match rows.next() {
@@ -846,10 +681,14 @@ impl Repository {
     pub fn set_active_trait_stage(conn: &Connection, life_id: &str, group_trait_ids: &[String], active_trait_id: &str) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
         for tid in group_trait_ids {
-            let icon_val = if tid == active_trait_id { Some("active") } else { None };
+            let (equip_state, icon_val) = if tid == active_trait_id {
+                ("active", Some("active"))
+            } else {
+                ("unequipped", None)
+            };
             conn.execute(
-                "UPDATE trait SET icon = ?1, updated_at = ?2 WHERE id = ?3 AND life_id = ?4",
-                params![icon_val, now, tid, life_id],
+                "UPDATE trait SET equip_state = ?1, icon = ?2, updated_at = ?3 WHERE id = ?4 AND life_id = ?5",
+                params![equip_state, icon_val, now, tid, life_id],
             )?;
         }
         Ok(())
@@ -866,7 +705,7 @@ impl Repository {
         if !equip {
             for tid in trait_ids {
                 conn.execute(
-                    "UPDATE trait SET icon = 'benched', updated_at = ?1 WHERE id = ?2 AND life_id = ?3",
+                    "UPDATE trait SET equip_state = 'benched', icon = 'benched', updated_at = ?1 WHERE id = ?2 AND life_id = ?3",
                     params![now, tid, life_id],
                 )?;
             }
@@ -876,10 +715,14 @@ impl Repository {
                 .or_else(|| trait_ids.first().cloned())
                 .unwrap_or_default();
             for tid in trait_ids {
-                let icon_val = if tid == &active_id { Some("active") } else { None };
+                let (equip_state, icon_val) = if tid == &active_id {
+                    ("active", Some("active"))
+                } else {
+                    ("unequipped", None)
+                };
                 conn.execute(
-                    "UPDATE trait SET icon = ?1, updated_at = ?2 WHERE id = ?3 AND life_id = ?4",
-                    params![icon_val, now, tid, life_id],
+                    "UPDATE trait SET equip_state = ?1, icon = ?2, updated_at = ?3 WHERE id = ?4 AND life_id = ?5",
+                    params![equip_state, icon_val, now, tid, life_id],
                 )?;
             }
         }
@@ -934,17 +777,24 @@ impl Repository {
                 continue;
             }
 
+            let is_benched = |t: &Trait| -> bool {
+                t.equip_state.as_deref() == Some("benched") || t.icon.as_deref() == Some("benched")
+            };
+            let is_active = |t: &Trait| -> bool {
+                t.equip_state.as_deref() == Some("active") || t.icon.as_deref() == Some("active")
+            };
+
             if component_traits.len() == 1 {
                 let single = component_traits[0];
-                if single.icon.as_deref() != Some("benched") {
+                if !is_benched(single) {
                     active_traits.push(single.clone());
                 }
             } else {
-                if let Some(act) = component_traits.iter().find(|item| item.icon.as_deref() == Some("active")) {
+                if let Some(act) = component_traits.iter().find(|item| is_active(item)) {
                     active_traits.push((*act).clone());
                 } else {
-                    let is_benched = component_traits.iter().any(|item| item.icon.as_deref() == Some("benched"));
-                    if !is_benched {
+                    let has_benched = component_traits.iter().any(|item| is_benched(item));
+                    if !has_benched {
                         let successors: HashSet<&str> = relations.iter().map(|r| r.successor_id.as_str()).collect();
                         let root_trait = component_traits
                             .iter()
@@ -1007,6 +857,65 @@ impl Repository {
         succ_id: &str,
         note: Option<&str>,
     ) -> Result<TraitRelation> {
+        if pred_id == succ_id {
+            return Err(custom_err("Trait relation cannot connect a trait to itself"));
+        }
+
+        let valid: bool = conn.query_row(
+            "SELECT (SELECT COUNT(*) FROM trait WHERE id = ?1 AND life_id = ?3) = 1 AND (SELECT COUNT(*) FROM trait WHERE id = ?2 AND life_id = ?3) = 1",
+            params![pred_id, succ_id, life_id],
+            |row| row.get(0),
+        )?;
+        if !valid {
+            return Err(custom_err("Predecessor and successor traits must belong to the specified life_id"));
+        }
+
+        // DAG cycle detection
+        let mut visited = std::collections::HashSet::new();
+        let mut queue = std::collections::VecDeque::new();
+        queue.push_back(succ_id.to_string());
+        visited.insert(succ_id.to_string());
+
+        let mut stmt = conn.prepare(
+            "SELECT successor_id FROM trait_relation WHERE life_id = ?1 AND predecessor_id = ?2",
+        )?;
+
+        let mut has_cycle = false;
+        while let Some(curr) = queue.pop_front() {
+            if curr == pred_id {
+                has_cycle = true;
+                break;
+            }
+            let next_nodes = stmt.query_map(params![life_id, curr], |r| r.get::<_, String>(0))?;
+            for next in next_nodes {
+                let n = next?;
+                if !visited.contains(&n) {
+                    visited.insert(n.clone());
+                    queue.push_back(n);
+                }
+            }
+        }
+
+        if has_cycle {
+            return Err(custom_err("Cannot add trait relation: would create a circular dependency cycle"));
+        }
+
+        let existing: Option<String> = conn.query_row(
+            "SELECT id FROM trait_relation WHERE life_id = ?1 AND predecessor_id = ?2 AND successor_id = ?3",
+            params![life_id, pred_id, succ_id],
+            |row| row.get(0),
+        ).ok();
+        if let Some(existing_id) = existing {
+            return Ok(TraitRelation {
+                id: existing_id,
+                life_id: life_id.to_string(),
+                predecessor_id: pred_id.to_string(),
+                successor_id: succ_id.to_string(),
+                occurred_at: chrono::Utc::now().to_rfc3339(),
+                note: note.map(String::from),
+            });
+        }
+
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
@@ -1315,17 +1224,20 @@ impl Repository {
         })
     }
 
-    pub fn update_essay(conn: &Connection, id: &str, title: &str, body_md: &str) -> Result<Essay> {
+    pub fn update_essay(conn: &Connection, life_id: &str, id: &str, title: &str, body_md: &str) -> Result<Essay> {
         let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
-            "UPDATE essay SET title = ?1, body_md = ?2, updated_at = ?3 WHERE id = ?4",
-            params![title, body_md, now, id],
+        let affected = conn.execute(
+            "UPDATE essay SET title = ?1, body_md = ?2, updated_at = ?3 WHERE id = ?4 AND life_id = ?5",
+            params![title, body_md, now, id, life_id],
         )?;
+        if affected == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
 
         let mut stmt = conn.prepare(
-            "SELECT id, life_id, title, body_md, created_at, updated_at FROM essay WHERE id = ?1",
+            "SELECT id, life_id, title, body_md, created_at, updated_at FROM essay WHERE id = ?1 AND life_id = ?2",
         )?;
-        stmt.query_row([id], |row| {
+        stmt.query_row(params![id, life_id], |row| {
             Ok(Essay {
                 id: row.get(0)?,
                 life_id: row.get(1)?,
@@ -1337,8 +1249,11 @@ impl Repository {
         })
     }
 
-    pub fn delete_essay(conn: &Connection, id: &str) -> Result<()> {
-        conn.execute("DELETE FROM essay WHERE id = ?1", params![id])?;
+    pub fn delete_essay(conn: &Connection, life_id: &str, id: &str) -> Result<()> {
+        let affected = conn.execute("DELETE FROM essay WHERE id = ?1 AND life_id = ?2", params![id, life_id])?;
+        if affected == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
         Ok(())
     }
 
@@ -1349,10 +1264,11 @@ impl Repository {
         // 1. 事件 (普通与超事件)
         if filter_type.is_none() || filter_type == Some("event") || filter_type == Some("super_event") {
             let mut stmt = conn.prepare(
-                "SELECT id, kind, title, body_md, occurred_on FROM event WHERE life_id = ?1 ORDER BY occurred_on DESC",
+                "SELECT id, kind, title, body_md, occurred_on, quote FROM event WHERE life_id = ?1 ORDER BY occurred_on DESC",
             )?;
             let rows = stmt.query_map([life_id], |row| {
                 let kind: String = row.get(1)?;
+                let quote: Option<String> = row.get(5)?;
                 Ok(ArchiveItem {
                     id: row.get(0)?,
                     item_type: if kind == "super" { "super_event".to_string() } else { "event".to_string() },
@@ -1360,7 +1276,7 @@ impl Repository {
                     summary: row.get(3)?,
                     occurred_at: row.get(4)?,
                     source_id: row.get(0)?,
-                    extra_badge: if kind == "super" { Some("超事件".to_string()) } else { Some("历史事件".to_string()) },
+                    extra_badge: quote.or_else(|| if kind == "super" { Some("超事件".to_string()) } else { Some("历史事件".to_string()) }),
                 })
             })?;
             for item in rows { items.push(item?); }
@@ -1551,33 +1467,6 @@ impl Repository {
             })?
             .collect::<Result<Vec<_>>>()?;
 
-        let mut dec_stmt = conn.prepare(
-            "SELECT d.id, d.title, d.body_md, d.category, d.kind, d.status, d.target_time, d.created_at, d.updated_at,
-                    COUNT(o.id) as occ_count
-             FROM decision d
-             LEFT JOIN decision_occurrence o ON o.decision_id = d.id AND o.voided_at IS NULL
-             WHERE d.life_id = ?1 AND d.status = 'open'
-             GROUP BY d.id
-             ORDER BY d.created_at DESC LIMIT 5",
-        )?;
-        let open_decisions: Vec<Decision> = dec_stmt
-            .query_map([life_id], |row| {
-                Ok(Decision {
-                    id: row.get(0)?,
-                    life_id: life_id.to_string(),
-                    title: row.get(1)?,
-                    body_md: row.get(2)?,
-                    category: row.get(3)?,
-                    kind: row.get(4)?,
-                    status: row.get(5)?,
-                    target_time: row.get(6)?,
-                    created_at: row.get(7)?,
-                    updated_at: row.get(8)?,
-                    occurrence_count: row.get(9)?,
-                })
-            })?
-            .collect::<Result<Vec<_>>>()?;
-
         let mut evt_stmt = conn.prepare(
             "SELECT id, title, body_md, kind, occurred_on, image_attachment_id, quote, snapshot_id, created_at, updated_at
              FROM event WHERE life_id = ?1 ORDER BY occurred_on DESC LIMIT 5",
@@ -1610,7 +1499,6 @@ impl Repository {
             ideologies,
             national_spirits,
             active_foci,
-            open_decisions,
             recent_events,
         }))
     }
@@ -1939,47 +1827,58 @@ impl Repository {
         for t in &overview.traits {
             md.push_str(&format!("- **{}**：{}\n", t.title, t.body_md));
         }
-        md.push_str("\n");
+        md.push('\n');
 
         md.push_str("## 意识形态\n\n");
         for i in &overview.ideologies {
             md.push_str(&format!("- **{}**：{}\n", i.title, i.body_md));
         }
-        md.push_str("\n");
+        md.push('\n');
 
         md.push_str("## 国家精神\n\n");
         for s in &overview.national_spirits {
             md.push_str(&format!("- **{}**：{}\n", s.title, s.body_md));
         }
-        md.push_str("\n");
+        md.push('\n');
 
         md.push_str("## 正在进行的重点国策\n\n");
         for f in &overview.active_foci {
             md.push_str(&format!("### 国策：{}\n\n{}\n\n", f.title, f.body_md));
         }
 
-        md.push_str("## 待执行决议\n\n");
-        for d in &overview.open_decisions {
-            md.push_str(&format!("- [ ] **{}**（已执行 {} 次）：{}\n", d.title, d.occurrence_count, d.body_md));
-        }
-        md.push_str("\n");
+
 
         Ok(md)
     }
 
     pub fn export_life_json(conn: &Connection, life_id: &str) -> Result<String> {
         let overview = Self::get_world_overview(conn, life_id)?;
+        let all_foci = Self::get_foci(conn, life_id)?;
+        let focus_relations = Self::get_focus_relations(conn, life_id)?;
+        let all_traits = Self::get_traits(conn, life_id, true)?;
+        let trait_relations = Self::get_trait_relations(conn, life_id)?;
+        let essays = Self::get_essays(conn, life_id)?;
+        let events = Self::get_events(conn, life_id)?;
         let sub_foci = Self::list_all_sub_foci(conn, life_id)?;
         let staff_members = Self::get_staff_members(conn, life_id)?;
         let staff_meetings = Self::get_staff_meetings(conn, life_id)?;
+        let stability_history = Self::get_stability_history(conn, life_id, 1000)?;
 
         let data = serde_json::json!({
-            "version": 1,
+            "version": 2,
             "exported_at": chrono::Utc::now().to_rfc3339(),
+            "life_id": life_id,
             "world_overview": overview,
+            "all_foci": all_foci,
+            "focus_relations": focus_relations,
+            "all_traits": all_traits,
+            "trait_relations": trait_relations,
+            "essays": essays,
+            "events": events,
             "sub_foci": sub_foci,
             "staff_members": staff_members,
             "staff_meetings": staff_meetings,
+            "stability_history": stability_history,
         });
 
         Ok(serde_json::to_string_pretty(&data).unwrap_or_default())

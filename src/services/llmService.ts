@@ -1,3 +1,5 @@
+import { invoke } from '@tauri-apps/api/core';
+import { isTauri } from '../api/client';
 import type {
   Focus,
   Trait,
@@ -11,6 +13,14 @@ export interface LLMConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+}
+
+export interface LlmConfigView {
+  provider: 'deepseek' | 'openai' | 'gemini' | 'custom';
+  baseUrl: string;
+  model: string;
+  hasApiKey: boolean;
+  maskedKey?: string | null;
 }
 
 export interface StrategyContext {
@@ -36,12 +46,30 @@ export interface AIProposalItem {
 
 const STORAGE_KEY = 'life_strategy_llm_config';
 
+function normalizeConfigView(raw: any): LlmConfigView {
+  return {
+    provider: (raw?.provider || 'deepseek') as any,
+    baseUrl: raw?.baseUrl || raw?.base_url || 'https://api.deepseek.com',
+    model: raw?.model || 'deepseek-chat',
+    hasApiKey: Boolean(raw?.hasApiKey ?? raw?.has_api_key ?? false),
+    maskedKey: raw?.maskedKey ?? raw?.masked_key ?? null,
+  };
+}
+
+let cachedConfigView: LlmConfigView = {
+  provider: 'deepseek',
+  baseUrl: 'https://api.deepseek.com',
+  model: 'deepseek-chat',
+  hasApiKey: false,
+  maskedKey: null,
+};
+
 export function getLLMConfig(): LLMConfig {
   const defaults: LLMConfig = {
-    provider: 'deepseek',
-    baseUrl: 'https://api.deepseek.com',
+    provider: cachedConfigView.provider,
+    baseUrl: cachedConfigView.baseUrl,
     apiKey: '',
-    model: 'deepseek-chat',
+    model: cachedConfigView.model,
   };
 
   try {
@@ -56,9 +84,101 @@ export function getLLMConfig(): LLMConfig {
   return defaults;
 }
 
+export async function fetchLLMConfigView(): Promise<LlmConfigView> {
+  if (isTauri) {
+    try {
+      const raw = await invoke<any>('llm_get_config');
+      cachedConfigView = normalizeConfigView(raw);
+      return cachedConfigView;
+    } catch (e) {
+      console.error('Failed to get LLM config:', e);
+    }
+  }
+  return cachedConfigView;
+}
+
+export function getCachedLLMConfigView(): LlmConfigView {
+  return cachedConfigView;
+}
+
+export async function saveLLMConfig(
+  provider: string,
+  baseUrl: string,
+  model: string,
+  apiKey?: string | null
+): Promise<LlmConfigView> {
+  if (isTauri) {
+    const raw = await invoke<any>('llm_save_config', {
+      provider,
+      baseUrl,
+      model,
+      apiKey: apiKey && apiKey.trim().length > 0 ? apiKey.trim() : null,
+    });
+    cachedConfigView = normalizeConfigView(raw);
+    return cachedConfigView;
+  }
+  // Browser preview fallback
+  const config = { provider, baseUrl, apiKey: apiKey || '', model };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  cachedConfigView = {
+    provider: provider as any,
+    baseUrl,
+    model,
+    hasApiKey: Boolean(apiKey && apiKey.length > 3),
+    maskedKey: apiKey ? `****${apiKey.slice(-4)}` : null,
+  };
+  return cachedConfigView;
+}
+
+export async function clearLLMKey(): Promise<LlmConfigView> {
+  if (isTauri) {
+    const raw = await invoke<any>('llm_clear_key');
+    cachedConfigView = normalizeConfigView(raw);
+    return cachedConfigView;
+  }
+  const current = getLLMConfig();
+  current.apiKey = '';
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+  cachedConfigView.hasApiKey = false;
+  cachedConfigView.maskedKey = null;
+  return cachedConfigView;
+}
+
 export function isLLMConfigured(): boolean {
+  if (isTauri) {
+    return cachedConfigView.hasApiKey;
+  }
   const config = getLLMConfig();
   return Boolean(config.apiKey && config.apiKey.trim().length > 3);
+}
+
+// 启动时初始化及单次迁移：将 localStorage 中的明文 API Key 迁入 Rust 安全存储并彻底抹除
+if (typeof window !== 'undefined') {
+  (async () => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.apiKey && isTauri) {
+          const migrated = await invoke<any>('llm_save_config', {
+            provider: parsed.provider || 'deepseek',
+            baseUrl: parsed.baseUrl || 'https://api.deepseek.com',
+            model: parsed.model || 'deepseek-chat',
+            apiKey: parsed.apiKey,
+          });
+          cachedConfigView = normalizeConfigView(migrated);
+          delete parsed.apiKey;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+          return;
+        }
+      }
+      if (isTauri) {
+        await fetchLLMConfigView();
+      }
+    } catch (e) {
+      console.error('LLM config initialization error:', e);
+    }
+  })();
 }
 
 /**
@@ -67,6 +187,23 @@ export function isLLMConfigured(): boolean {
 export async function testLLMConnection(
   customConfig?: Partial<LLMConfig>
 ): Promise<{ success: boolean; message: string }> {
+  if (isTauri) {
+    try {
+      const reply = await invoke<string>('llm_test_connection', {
+        request: {
+          provider: customConfig?.provider || cachedConfigView.provider,
+          baseUrl: customConfig?.baseUrl || cachedConfigView.baseUrl,
+          model: customConfig?.model || cachedConfigView.model,
+          apiKey: customConfig?.apiKey && customConfig.apiKey.trim().length > 0 ? customConfig.apiKey.trim() : null,
+        },
+      });
+      return { success: true, message: reply };
+    } catch (err: any) {
+      return { success: false, message: typeof err === 'string' ? err : (err?.message || String(err)) };
+    }
+  }
+
+  // Browser Mock / Dev fallback
   const current = getLLMConfig();
   const config = { ...current, ...(customConfig || {}) };
   if (!config.apiKey || config.apiKey.trim().length === 0) {
@@ -125,14 +262,28 @@ export async function testLLMConnection(
   }
 }
 
-
 /**
- * 通用 OpenAI 兼容协议 Chat Completion 调用
+ * 通用 Chat Completion 调用 (通过 Rust 后端安全代理，彻底避免浏览器跨域与密钥泄露)
  */
 async function callChatCompletions(
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
   temperature = 0.7
 ): Promise<string> {
+  if (isTauri) {
+    try {
+      const reply = await invoke<string>('llm_chat', {
+        request: {
+          messages,
+          temperature,
+        },
+      });
+      return reply;
+    } catch (err: any) {
+      throw new Error(typeof err === 'string' ? err : (err?.message || String(err)));
+    }
+  }
+
+  // Browser Mock / Dev fallback
   const config = getLLMConfig();
   if (!config.apiKey) {
     throw new Error('未配置 API 密钥，请在系统设置中填入有效的 API Key');
@@ -789,71 +940,6 @@ export async function recommendTraits(
   ];
 }
 
-/**
- * 7. AI 启发战略决议候选 (§8) - 带有用户自定义需求
- */
-export async function recommendDecisions(
-  context: StrategyContext,
-  userRequirement = ''
-): Promise<{ title: string; bodyMd: string; kind: 'one_off' | 'repeatable'; category: string }[]> {
-  const reqText = userRequirement.trim() ? `\n统帅特定需求：${userRequirement.trim()}` : '';
-  const prompt = `结合当前局势「${context.situation || '攻坚期'}」与正在推进的国策。${reqText}
-推演 3 个高性价比的日常战略决议（Decision）。
-其中包含 1 个一次性重大攻坚决议与 2 个可重复打卡修炼的习惯决议。
-
-请严格返回如下 JSON 数组：
-[
-  {
-    "title": "决议标题",
-    "bodyMd": "决议说明与执行要领",
-    "kind": "repeatable",
-    "category": "精力管理"
-  }
-]`;
-
-  if (isLLMConfigured()) {
-    try {
-      const systemPrompt = buildSystemContextPrompt(context, '冷静客观', true);
-      const rawRes = await callChatCompletions([
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt },
-      ]);
-      const jsonStr = extractJsonFromResponse(rawRes);
-      const parsed = JSON.parse(jsonStr);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((p) => ({
-          title: String(p.title),
-          bodyMd: String(p.bodyMd),
-          kind: p.kind === 'one_off' ? 'one_off' : 'repeatable',
-          category: String(p.category || '核心战略'),
-        }));
-      }
-    } catch (err) {
-      console.warn('Recommend decisions LLM call failed:', err);
-    }
-  }
-
-  return [
-    {
-      title: '每日战略沉思与晨间定标',
-      bodyMd: '晨起后断网 30 分钟，审视当日最核心的 1 件必胜战略要务，杜绝琐碎事务稀释精力。',
-      kind: 'repeatable',
-      category: '心智专注',
-    },
-    {
-      title: '深度攻坚战役突击日',
-      bodyMd: '划定整段完整不被打扰的 4 小时时间窗口，攻克主线国策的关键技术壁垒。',
-      kind: 'repeatable',
-      category: '核心攻坚',
-    },
-    {
-      title: '全面资产与信息源断舍离清理',
-      bodyMd: '进行一次性深度肃清：退订低质信息流、清理桌面工作区、斩断无效社交羁绊。',
-      kind: 'one_off',
-      category: '环境整肃',
-    },
-  ];
-}
 
 /**
  * 辅助：对作战参谋对话发言进行强力清洗过滤

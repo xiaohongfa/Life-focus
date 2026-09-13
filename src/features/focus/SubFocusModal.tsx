@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Focus, FocusSubItem } from '../../api/types';
 import { api } from '../../api/client';
-import { X, Plus, CheckCircle2, Circle, Trash2, ListTodo, Award, Calendar, Sparkles, Check } from 'lucide-react';
+import { X, Plus, CheckCircle2, Circle, Trash2, ListTodo, Award, Calendar, Sparkles, Check, Clock, XCircle } from 'lucide-react';
 import { AICommandModal } from '../../components/AICommandModal';
 import { decomposeFocusSubItems } from '../../services/llmService';
 
@@ -54,8 +54,7 @@ export const SubFocusModal: React.FC<SubFocusModalProps> = ({
 
   if (!isOpen || !focus) return null;
 
-  const handleToggle = async (item: FocusSubItem) => {
-    const nextStatus = item.status === 'done' ? 'todo' : 'done';
+  const handleStatusChange = async (item: FocusSubItem, nextStatus: string) => {
     try {
       await api.updateSubFocusStatus(lifeId, item.id, nextStatus);
       await loadSubItems();
@@ -63,6 +62,15 @@ export const SubFocusModal: React.FC<SubFocusModalProps> = ({
     } catch (err) {
       console.error('Failed to update sub-focus status:', err);
     }
+  };
+
+  const handleToggle = async (item: FocusSubItem) => {
+    let nextStatus = 'todo';
+    if (item.status === 'todo') nextStatus = 'in_progress';
+    else if (item.status === 'in_progress') nextStatus = 'done';
+    else if (item.status === 'done') nextStatus = 'todo';
+    else if (item.status === 'canceled') nextStatus = 'todo';
+    await handleStatusChange(item, nextStatus);
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -123,8 +131,10 @@ export const SubFocusModal: React.FC<SubFocusModalProps> = ({
 
   const totalCount = items.length;
   const doneCount = items.filter((i) => i.status === 'done').length;
-  const percent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
-  const isAllDone = totalCount > 0 && doneCount === totalCount;
+  const canceledCount = items.filter((i) => i.status === 'canceled').length;
+  const activeCount = totalCount - canceledCount;
+  const percent = activeCount > 0 ? Math.round((doneCount / activeCount) * 100) : (totalCount > 0 && doneCount === totalCount ? 100 : 0);
+  const isAllDone = activeCount > 0 && doneCount === activeCount;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
@@ -219,12 +229,18 @@ export const SubFocusModal: React.FC<SubFocusModalProps> = ({
           ) : (
             items.map((item, idx) => {
               const isDone = item.status === 'done';
+              const isInProgress = item.status === 'in_progress';
+              const isCanceled = item.status === 'canceled';
               return (
                 <div
                   key={item.id}
                   className={`group flex items-start justify-between p-3.5 rounded-lg border transition ${
                     isDone
                       ? 'bg-slate-950/40 border-slate-800/60 opacity-85'
+                      : isCanceled
+                      ? 'bg-rose-950/20 border-rose-900/40 opacity-70'
+                      : isInProgress
+                      ? 'bg-amber-950/20 border-amber-600/40 shadow-sm'
                       : 'bg-slate-800/40 border-slate-700/80 hover:border-strategy-gold/50 shadow-sm'
                   }`}
                 >
@@ -233,22 +249,50 @@ export const SubFocusModal: React.FC<SubFocusModalProps> = ({
                       type="button"
                       onClick={() => handleToggle(item)}
                       className="mt-0.5 text-slate-400 hover:text-strategy-gold transition shrink-0"
-                      title={isDone ? '标记为未完成' : '标记为已达成'}
+                      title={`当前状态: ${item.status}，点击快速切换状态`}
                     >
                       {isDone ? (
                         <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                      ) : isCanceled ? (
+                        <XCircle className="w-5 h-5 text-rose-400" />
+                      ) : isInProgress ? (
+                        <Clock className="w-5 h-5 text-amber-400 animate-pulse" />
                       ) : (
                         <Circle className="w-5 h-5 text-slate-500 group-hover:text-amber-400" />
                       )}
                     </button>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                         <span className="font-mono text-[10px] text-strategy-gold/80 px-1 py-0.2 bg-slate-900 rounded">
                           #{idx + 1}
                         </span>
+                        <select
+                          value={item.status}
+                          onChange={(e) => handleStatusChange(item, e.target.value)}
+                          className={`text-[10px] font-mono rounded px-1.5 py-0.5 border cursor-pointer focus:outline-none ${
+                            isDone
+                              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
+                              : isCanceled
+                              ? 'bg-rose-950/60 text-rose-300 border-rose-800/60'
+                              : isInProgress
+                              ? 'bg-amber-950/60 text-amber-300 border-amber-600/60'
+                              : 'bg-slate-900 text-slate-400 border-slate-700'
+                          }`}
+                        >
+                          <option value="todo">待办 (TODO)</option>
+                          <option value="in_progress">推进中 (IN_PROGRESS)</option>
+                          <option value="done">已达成 (DONE)</option>
+                          <option value="canceled">已作废 (CANCELED)</option>
+                        </select>
                         <h5
                           className={`text-sm font-medium leading-snug break-words ${
-                            isDone ? 'line-through text-slate-500' : 'text-slate-100'
+                            isDone
+                              ? 'line-through text-slate-500'
+                              : isCanceled
+                              ? 'line-through text-rose-400/70'
+                              : isInProgress
+                              ? 'text-amber-200'
+                              : 'text-slate-100'
                           }`}
                         >
                           {item.title}

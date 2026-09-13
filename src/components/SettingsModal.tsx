@@ -21,7 +21,12 @@ import {
   Trash2,
   AlertTriangle,
 } from 'lucide-react';
-import { testLLMConnection } from '../services/llmService';
+import {
+  testLLMConnection,
+  saveLLMConfig,
+  clearLLMKey,
+  fetchLLMConfigView,
+} from '../services/llmService';
 import { promptStore, PromptItem } from '../services/promptStore';
 
 interface SettingsModalProps {
@@ -50,6 +55,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [baseUrl, setBaseUrl] = useState('https://api.deepseek.com');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('deepseek-chat');
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [maskedKey, setMaskedKey] = useState<string | null>(null);
   const [savedAiStatus, setSavedAiStatus] = useState(false);
   const [testingAi, setTestingAi] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -65,20 +72,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    // 加载本地已保存的配置
-    const savedConfig = localStorage.getItem('life_strategy_llm_config');
-    if (savedConfig) {
-      try {
-        const parsed = JSON.parse(savedConfig);
-        if (parsed.provider) setProvider(parsed.provider);
-        if (parsed.baseUrl) setBaseUrl(parsed.baseUrl);
-        if (parsed.apiKey) setApiKey(parsed.apiKey);
-        if (parsed.model) setModel(parsed.model);
-      } catch (e) {
-        console.error('Failed to parse saved LLM config:', e);
-      }
+    if (isOpen) {
+      fetchLLMConfigView().then((cfg) => {
+        setProvider(cfg.provider as any);
+        setBaseUrl(cfg.baseUrl);
+        setModel(cfg.model);
+        setHasApiKey(cfg.hasApiKey);
+        setMaskedKey(cfg.maskedKey || null);
+      });
     }
-  }, []);
+  }, [isOpen]);
 
   const handleProviderChange = (p: 'deepseek' | 'openai' | 'gemini' | 'custom') => {
     setProvider(p);
@@ -94,19 +97,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const handleSaveAiConfig = (e: React.FormEvent) => {
+  const handleSaveAiConfig = async (e: React.FormEvent) => {
     e.preventDefault();
-    const config = { provider, baseUrl, apiKey, model };
-    localStorage.setItem('life_strategy_llm_config', JSON.stringify(config));
-    setSavedAiStatus(true);
-    setTimeout(() => setSavedAiStatus(false), 2000);
+    try {
+      const res = await saveLLMConfig(provider, baseUrl, model, apiKey.trim() || undefined);
+      setHasApiKey(res.hasApiKey);
+      setMaskedKey(res.maskedKey || null);
+      setApiKey('');
+      setSavedAiStatus(true);
+      setTimeout(() => setSavedAiStatus(false), 2000);
+    } catch (err: any) {
+      alert(`保存失败: ${err?.message || String(err)}`);
+    }
+  };
+
+  const handleClearKey = async () => {
+    if (!window.confirm('确认清除已保存在本机的安全 API 密钥？')) return;
+    try {
+      const res = await clearLLMKey();
+      setHasApiKey(res.hasApiKey);
+      setMaskedKey(null);
+      setApiKey('');
+    } catch (err: any) {
+      alert(`清除失败: ${err?.message || String(err)}`);
+    }
   };
 
   const handleTestConnection = async () => {
     setTestingAi(true);
     setTestResult(null);
     try {
-      const res = await testLLMConnection({ provider, baseUrl, apiKey, model });
+      const res = await testLLMConnection({
+        provider,
+        baseUrl,
+        apiKey: apiKey.trim() || undefined,
+        model,
+      });
       setTestResult(res);
     } catch (err: any) {
       setTestResult({ success: false, message: err.message || String(err) });
@@ -341,13 +367,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center space-x-1">
-                  <Key className="w-3.5 h-3.5 text-strategy-gold" />
-                  <span>API 密钥 (API Key)</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-300 flex items-center space-x-1">
+                    <Key className="w-3.5 h-3.5 text-strategy-gold" />
+                    <span>API 密钥 (API Key)</span>
+                  </label>
+                  {hasApiKey && (
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+                        安全就绪: {maskedKey || '已安全存储'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleClearKey}
+                        className="text-[10px] text-rose-400 hover:text-rose-300 underline cursor-pointer"
+                      >
+                        清除密钥
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <input
                   type="password"
-                  placeholder="sk-..."
+                  placeholder={hasApiKey ? '已保存安全密钥（留空保持不变，输入新值可覆盖）' : 'sk-...'}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-strategy-gold"
@@ -401,7 +443,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center justify-between pt-3 border-t border-slate-800">
                 <button
                   type="button"
-                  disabled={testingAi || !apiKey.trim()}
+                  disabled={testingAi || (!apiKey.trim() && !hasApiKey)}
                   onClick={handleTestConnection}
                   className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition disabled:opacity-50"
                   title="向服务商接口发送探针，即时检验 API Key 与 Base URL 是否正确"

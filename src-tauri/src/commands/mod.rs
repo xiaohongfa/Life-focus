@@ -205,83 +205,6 @@ pub fn get_focus_history(
     Repository::get_focus_history(&conn, &life_id, focus_id.as_deref()).map_err(map_err)
 }
 
-// ==================== DECISION COMMANDS ====================
-#[tauri::command]
-pub fn get_decisions(state: State<'_, DbState>, life_id: String) -> Result<Vec<Decision>, String> {
-    let conn = state.conn.lock().map_err(map_err)?;
-    Repository::get_decisions(&conn, &life_id).map_err(map_err)
-}
-
-#[tauri::command]
-pub fn create_decision(
-    state: State<'_, DbState>,
-    life_id: String,
-    title: String,
-    body_md: String,
-    category: Option<String>,
-    kind: String,
-    target_time: Option<String>,
-) -> Result<Decision, String> {
-    let conn = state.conn.lock().map_err(map_err)?;
-    Repository::create_decision(
-        &conn,
-        &life_id,
-        &title,
-        &body_md,
-        category.as_deref(),
-        &kind,
-        target_time.as_deref(),
-    )
-    .map_err(map_err)
-}
-
-#[tauri::command]
-pub fn record_decision_occurrence(
-    state: State<'_, DbState>,
-    life_id: String,
-    decision_id: String,
-    note: Option<String>,
-) -> Result<DecisionOccurrence, String> {
-    let mut conn = state.conn.lock().map_err(map_err)?;
-    Repository::record_decision_occurrence(&mut conn, &life_id, &decision_id, note.as_deref()).map_err(map_err)
-}
-
-#[tauri::command]
-pub fn void_decision_occurrence(
-    state: State<'_, DbState>,
-    life_id: String,
-    occurrence_id: String,
-    void_reason: Option<String>,
-) -> Result<(), String> {
-    let mut conn = state.conn.lock().map_err(map_err)?;
-    Repository::void_decision_occurrence(&mut conn, &life_id, &occurrence_id, void_reason.as_deref())
-        .map_err(map_err)
-}
-
-#[tauri::command]
-pub fn decrement_decision_occurrence(
-    state: State<'_, DbState>,
-    life_id: String,
-    decision_id: String,
-) -> Result<(), String> {
-    let mut conn = state.conn.lock().map_err(map_err)?;
-    Repository::decrement_decision_occurrence(&mut conn, &life_id, &decision_id)
-        .map_err(map_err)
-}
-
-#[tauri::command]
-pub fn update_decision_status(
-    state: State<'_, DbState>,
-    life_id: String,
-    decision_id: String,
-    new_status: String,
-    reason: Option<String>,
-) -> Result<(), String> {
-    let mut conn = state.conn.lock().map_err(map_err)?;
-    Repository::update_decision_status(&mut conn, &life_id, &decision_id, &new_status, reason.as_deref())
-        .map_err(map_err)
-}
-
 // ==================== WORLD OBJECT COMMANDS ====================
 #[tauri::command]
 pub fn get_leader(state: State<'_, DbState>, life_id: String) -> Result<Option<Leader>, String> {
@@ -484,21 +407,23 @@ pub fn create_essay(
 #[tauri::command]
 pub fn update_essay(
     state: State<'_, DbState>,
+    life_id: String,
     id: String,
     title: String,
     body_md: String,
 ) -> Result<Essay, String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::update_essay(&conn, &id, &title, &body_md).map_err(map_err)
+    Repository::update_essay(&conn, &life_id, &id, &title, &body_md).map_err(map_err)
 }
 
 #[tauri::command]
 pub fn delete_essay(
     state: State<'_, DbState>,
+    life_id: String,
     id: String,
 ) -> Result<(), String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::delete_essay(&conn, &id).map_err(map_err)
+    Repository::delete_essay(&conn, &life_id, &id).map_err(map_err)
 }
 
 // ==================== ARCHIVE COMMANDS ====================

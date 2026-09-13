@@ -36,7 +36,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [isSoundOn, setIsSoundOn] = useState(() => soundFx.isEnabled());
 
   // 仪表盘绑定的真实战役数据
-  const stabVal = stability?.current_value ?? 70;
+  const hasStab = stability?.current_value != null;
+  const stabDisplay = hasStab ? `${stability!.current_value!.toFixed(0)}%` : '未设定';
   
 
 
@@ -100,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
             title="心智稳定度（点击调节与查看历史复盘记录）"
           >
             <span>🛡️ 心智稳定度</span>
-            <span className="text-amber-300 font-sans text-sm font-black">{stabVal.toFixed(0)}%</span>
+            <span className="text-amber-300 font-sans text-sm font-black">{stabDisplay}</span>
           </button>
         </div>
 

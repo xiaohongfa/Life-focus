@@ -29,9 +29,15 @@ pub struct Trait {
     pub title: String,
     pub body_md: String,
     pub icon: Option<String>,
+    #[serde(default = "default_equip_state")]
+    pub equip_state: Option<String>,
     pub archived_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+fn default_equip_state() -> Option<String> {
+    Some("unequipped".to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -195,46 +201,6 @@ pub struct FocusSubItem {
     pub updated_at: String,
 }
 
-// 9. 决议系统
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Decision {
-    pub id: String,
-    pub life_id: String,
-    pub title: String,
-    pub body_md: String,
-    pub category: Option<String>,
-    pub kind: String, // "one_off" | "repeatable"
-    pub status: String, // "open" | "completed" | "abandoned"
-    pub target_time: Option<String>,
-    pub occurrence_count: i64,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DecisionOccurrence {
-    pub id: String,
-    pub life_id: String,
-    pub decision_id: String,
-    pub occurred_at: String,
-    pub recorded_at: String,
-    pub note: Option<String>,
-    pub voided_at: Option<String>,
-    pub void_reason: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DecisionStatusHistory {
-    pub id: String,
-    pub life_id: String,
-    pub decision_id: String,
-    pub from_status: Option<String>,
-    pub to_status: String,
-    pub occurred_at: String,
-    pub recorded_at: String,
-    pub reason: Option<String>,
-}
-
 // 10. 事件与随笔
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
@@ -360,6 +326,5 @@ pub struct WorldOverview {
     pub ideologies: Vec<Ideology>,
     pub national_spirits: Vec<NationalSpirit>,
     pub active_foci: Vec<Focus>,
-    pub open_decisions: Vec<Decision>,
     pub recent_events: Vec<Event>,
 }

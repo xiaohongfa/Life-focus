@@ -67,22 +67,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="flex-1 min-w-0 pt-0.5">
               <h4 className="text-lg font-serif font-black text-[#1f190e] truncate tracking-wide">
-                {leader?.name || '张伟'}
+                {leader?.name || '最高统帅'}
               </h4>
               <div className="text-[10px] font-mono text-[#735e3b] font-bold uppercase -mt-0.5">
-                ZHANG WEI
+                {leader?.name ? 'SUPREME COMMANDER' : 'COMMANDER'}
               </div>
 
               <div className="mt-2 space-y-0.5 text-xs font-serif text-[#4a3e2e]">
                 <div className="flex items-center space-x-1.5">
-                  <span className="text-[11px] font-mono text-[#78664a] font-bold">Rank:</span>
-                  <span className="font-bold text-[#1f190e]">少将 (MAJOR GENERAL)</span>
+                  <span className="text-[11px] font-mono text-[#78664a] font-bold">Role:</span>
+                  <span className="font-bold text-[#1f190e]">最高统帅 (COMMANDER)</span>
                 </div>
                 <div className="flex items-center space-x-1.5">
                   <span className="text-[11px] font-mono text-[#78664a] font-bold">Status:</span>
                   <span className="font-bold text-emerald-800 flex items-center space-x-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block animate-pulse" />
-                    <span>活跃 Active</span>
+                    <span>在役 Active</span>
                   </span>
                 </div>
               </div>
@@ -124,7 +124,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {t.title}
                       </span>
                       <span className="text-[8px] font-mono font-bold text-[#735e3b] uppercase tracking-wider">
-                        {idx === 0 ? 'DECISIVE' : idx === 1 ? 'VETERAN' : idx === 2 ? 'RESTRAINED' : 'STEADFAST'}
+                        {`MEDAL #${idx + 1}`}
                       </span>
                     </div>
                   </button>

@@ -26,18 +26,7 @@ fn test_migrations_and_life_isolation() {
     )
     .expect("failed to create focus in life A");
 
-    let decision_a = Repository::create_decision(
-        &conn,
-        &life_a.id,
-        "查阅最新顶会综述",
-        "阅读 3 篇文献",
-        Some("研究"),
-        "repeatable",
-        None,
-    )
-    .expect("failed to create decision in life A");
-
-    // 3. 在 Life B 创建特质与国策
+    // 3. 在 Life B 创建国策
     let focus_b = Repository::create_focus(
         &mut conn,
         &life_b.id,
@@ -58,12 +47,6 @@ fn test_migrations_and_life_isolation() {
     assert_eq!(foci_a[0].id, focus_a.id);
     assert_eq!(foci_b.len(), 1);
     assert_eq!(foci_b[0].id, focus_b.id);
-
-    let decs_a = Repository::get_decisions(&conn, &life_a.id).unwrap();
-    let decs_b = Repository::get_decisions(&conn, &life_b.id).unwrap();
-    assert_eq!(decs_a.len(), 1);
-    assert_eq!(decs_a[0].id, decision_a.id);
-    assert_eq!(decs_b.len(), 0); // Life B 决议为空
 }
 
 #[test]
@@ -98,28 +81,7 @@ fn test_stability_arbitrary_value_and_history() {
     assert_eq!(history.len(), 3);
 }
 
-#[test]
-fn test_repeatable_decision_and_void() {
-    let state = DbState::in_memory().expect("in-memory db init failed");
-    let mut conn = state.conn.lock().unwrap();
-    let life = Repository::create_life(&mut conn, "决议测试").unwrap();
 
-    let dec = Repository::create_decision(&conn, &life.id, "晨跑锻炼", "3公里", Some("健康"), "repeatable", None).unwrap();
-
-    // 重复决议无限次完成 (A10)
-    let occ1 = Repository::record_decision_occurrence(&mut conn, &life.id, &dec.id, Some("第1次")).unwrap();
-    let _occ2 = Repository::record_decision_occurrence(&mut conn, &life.id, &dec.id, Some("第2次")).unwrap();
-    let _occ3 = Repository::record_decision_occurrence(&mut conn, &life.id, &dec.id, Some("第3次")).unwrap();
-
-    let decs = Repository::get_decisions(&conn, &life.id).unwrap();
-    assert_eq!(decs[0].occurrence_count, 3);
-    assert_eq!(decs[0].status, "open"); // 重复决议依然保持 open
-
-    // 误记作废 (A12)
-    Repository::void_decision_occurrence(&mut conn, &life.id, &occ1.id, Some("误点击")).unwrap();
-    let decs_after = Repository::get_decisions(&conn, &life.id).unwrap();
-    assert_eq!(decs_after[0].occurrence_count, 2); // 作废后累计次数减 1
-}
 
 #[test]
 fn test_unified_archive_aggregation() {
@@ -284,49 +246,12 @@ fn test_focus_canvas_operations_and_relations() {
 }
 
 #[test]
-fn test_decision_decrement_and_trait_relation_delete() {
+fn test_trait_relation_delete() {
     let state = DbState::in_memory().expect("in-memory db init failed");
     let mut conn = state.conn.lock().unwrap();
-    let life = Repository::create_life(&mut conn, "测试人生 · 边界决议特质").unwrap();
+    let life = Repository::create_life(&mut conn, "测试人生 · 特质解绑").unwrap();
 
-    // 1. 决议次数打卡与扣减 (-1)
-    let dec = Repository::create_decision(
-        &conn,
-        &life.id,
-        "晨跑打卡",
-        "晨跑 3 公里",
-        Some("精力管理"),
-        "repeatable",
-        None,
-    ).unwrap();
-
-    // 连续打卡 2 次
-    Repository::record_decision_occurrence(&mut conn, &life.id, &dec.id, Some("第 1 天")).unwrap();
-    Repository::record_decision_occurrence(&mut conn, &life.id, &dec.id, Some("第 2 天")).unwrap();
-
-    let list = Repository::get_decisions(&conn, &life.id).unwrap();
-    let item = list.iter().find(|d| d.id == dec.id).unwrap();
-    assert_eq!(item.occurrence_count, 2);
-
-    // 扣减打卡 (-1)
-    Repository::decrement_decision_occurrence(&mut conn, &life.id, &dec.id).unwrap();
-    let list2 = Repository::get_decisions(&conn, &life.id).unwrap();
-    let item2 = list2.iter().find(|d| d.id == dec.id).unwrap();
-    assert_eq!(item2.occurrence_count, 1);
-
-    // 再次扣减 (-1)
-    Repository::decrement_decision_occurrence(&mut conn, &life.id, &dec.id).unwrap();
-    let list3 = Repository::get_decisions(&conn, &life.id).unwrap();
-    let item3 = list3.iter().find(|d| d.id == dec.id).unwrap();
-    assert_eq!(item3.occurrence_count, 0);
-
-    // 次数为 0 时再次扣减不报错且维持 0
-    Repository::decrement_decision_occurrence(&mut conn, &life.id, &dec.id).unwrap();
-    let list4 = Repository::get_decisions(&conn, &life.id).unwrap();
-    let item4 = list4.iter().find(|d| d.id == dec.id).unwrap();
-    assert_eq!(item4.occurrence_count, 0);
-
-    // 2. 特质创建与解绑关系 (delete_trait_relation)
+    // 特质创建与解绑关系 (delete_trait_relation)
     let t1 = Repository::create_trait(&conn, &life.id, "三角洲能力等级一", "初阶心智", None).unwrap();
     let t2 = Repository::create_trait(&conn, &life.id, "三角洲能力等级二", "进阶心智", None).unwrap();
 
@@ -356,7 +281,7 @@ fn test_essay_crud() {
     assert_eq!(list1.len(), 1);
 
     // 2. 更新随笔
-    let updated = Repository::update_essay(&conn, &essay.id, "初期战略反思 (修订版)", "深化复盘：增加反思与次要路线剪枝。").unwrap();
+    let updated = Repository::update_essay(&conn, &life.id, &essay.id, "初期战略反思 (修订版)", "深化复盘：增加反思与次要路线剪枝。").unwrap();
     assert_eq!(updated.title, "初期战略反思 (修订版)");
     assert_eq!(updated.body_md, "深化复盘：增加反思与次要路线剪枝。");
 
@@ -369,7 +294,7 @@ fn test_essay_crud() {
     assert_eq!(feed[0].title, "随笔: 初期战略反思 (修订版)");
 
     // 4. 删除随笔
-    Repository::delete_essay(&conn, &essay.id).unwrap();
+    Repository::delete_essay(&conn, &life.id, &essay.id).unwrap();
     let list3 = Repository::get_essays(&conn, &life.id).unwrap();
     assert_eq!(list3.len(), 0);
 
@@ -494,6 +419,80 @@ fn test_active_equipped_traits_and_stage_mutual_exclusion() {
     assert_eq!(overview4.traits.len(), 3);
     let active_s4 = overview4.traits.iter().find(|t| t.title.starts_with("四角洲能力")).unwrap();
     assert_eq!(active_s4.id, s4.id, "重新上阵后激活的应是指定的第4阶");
+}
+
+#[test]
+fn test_cross_life_isolation_and_dag_cycle_prevention() {
+    let state = DbState::in_memory().unwrap();
+    let mut conn = state.conn.lock().unwrap();
+
+    let life_a = Repository::create_life(&mut conn, "世界A").unwrap();
+    let life_b = Repository::create_life(&mut conn, "世界B").unwrap();
+
+    // 1. 创建国策
+    let fa1 = Repository::create_focus(&mut conn, &life_a.id, "A1", "", None, None, "active", 0.0, 0.0).unwrap();
+    let fa2 = Repository::create_focus(&mut conn, &life_a.id, "A2", "", None, None, "active", 0.0, 0.0).unwrap();
+    let fa3 = Repository::create_focus(&mut conn, &life_a.id, "A3", "", None, None, "active", 0.0, 0.0).unwrap();
+    let fb1 = Repository::create_focus(&mut conn, &life_b.id, "B1", "", None, None, "active", 0.0, 0.0).unwrap();
+
+    // 跨人生空间关系拦截验证
+    let cross_res = Repository::add_focus_relation(&conn, &life_a.id, &fa1.id, &fb1.id, "prerequisite", None);
+    assert!(cross_res.is_err(), "跨人生空间创建国策关联必须被彻底阻断拒绝");
+
+    // 自连接拦截验证
+    let self_res = Repository::add_focus_relation(&conn, &life_a.id, &fa1.id, &fa1.id, "prerequisite", None);
+    assert!(self_res.is_err(), "国策关联不能连接自身");
+
+    // 正常添加 A1 -> A2
+    Repository::add_focus_relation(&conn, &life_a.id, &fa1.id, &fa2.id, "prerequisite", None).unwrap();
+    // 正常添加 A2 -> A3
+    Repository::add_focus_relation(&conn, &life_a.id, &fa2.id, &fa3.id, "prerequisite", None).unwrap();
+
+    // 环路检测：尝试添加 A3 -> A1，构成 A1 -> A2 -> A3 -> A1 环路，必须拦截！
+    let cycle_res = Repository::add_focus_relation(&conn, &life_a.id, &fa3.id, &fa1.id, "prerequisite", None);
+    assert!(cycle_res.is_err(), "国策前置环路必须被 DAG 检测拒绝！");
+
+    // 互斥关系正规化验证 (min, max)
+    let mx1 = Repository::add_focus_relation(&conn, &life_a.id, &fa2.id, &fa1.id, "mutually_exclusive", None).unwrap();
+    let expected_src = if fa1.id < fa2.id { &fa1.id } else { &fa2.id };
+    let expected_tgt = if fa1.id < fa2.id { &fa2.id } else { &fa1.id };
+    assert_eq!(&mx1.source_focus_id, expected_src);
+    assert_eq!(&mx1.target_focus_id, expected_tgt);
+
+    // 2. 特质环路与跨生命周期检测
+    let ta1 = Repository::create_trait(&conn, &life_a.id, "特质A1", "", None).unwrap();
+    let ta2 = Repository::create_trait(&conn, &life_a.id, "特质A2", "", None).unwrap();
+    let tb1 = Repository::create_trait(&conn, &life_b.id, "特质B1", "", None).unwrap();
+
+    let cross_trait = Repository::add_trait_relation(&conn, &life_a.id, &ta1.id, &tb1.id, None);
+    assert!(cross_trait.is_err(), "跨人生空间创建特质关联必须被拒绝");
+
+    Repository::add_trait_relation(&conn, &life_a.id, &ta1.id, &ta2.id, None).unwrap();
+    let cycle_trait = Repository::add_trait_relation(&conn, &life_a.id, &ta2.id, &ta1.id, None);
+    assert!(cycle_trait.is_err(), "特质演化成环必须被拒绝");
+}
+
+#[test]
+fn test_trait_equip_state_migration_and_integrity() {
+    let state = DbState::in_memory().unwrap();
+    let mut conn = state.conn.lock().unwrap();
+
+    let life = Repository::create_life(&mut conn, "装备状态测试空间").unwrap();
+    let t = Repository::create_trait(&conn, &life.id, "深度专注力", "初阶心智", None).unwrap();
+    assert_eq!(t.equip_state.as_deref(), Some("unequipped"));
+
+    let group = vec![t.id.clone()];
+    Repository::set_active_trait_stage(&conn, &life.id, &group, &t.id).unwrap();
+
+    let fetched = Repository::get_traits(&conn, &life.id, false).unwrap();
+    assert_eq!(fetched[0].equip_state.as_deref(), Some("active"));
+
+    // 验证完整导出包含完整生命周期数据
+    let json_str = Repository::export_life_json(&conn, &life.id).unwrap();
+    assert!(json_str.contains("\"all_foci\""));
+    assert!(json_str.contains("\"focus_relations\""));
+    assert!(json_str.contains("\"all_traits\""));
+    assert!(json_str.contains("\"version\": 2"));
 }
 
 

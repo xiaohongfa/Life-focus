@@ -33,9 +33,9 @@ export const SnapshotsView: React.FC<SnapshotsViewProps> = ({ lifeId }) => {
     if (!name.trim()) return;
     try {
       soundFx.playStamp();
-      // 聚合当前世界状态 payload (§11.1)
-      const overview = await api.getWorldOverview(lifeId);
-      const payloadJson = JSON.stringify(overview || {});
+      // 聚合当前完整世界状态 payload (§11.1 / P1-DATA-07)
+      const exportJson = await api.exportLifeJson(lifeId);
+      const payloadJson = typeof exportJson === 'string' ? exportJson : JSON.stringify(exportJson || {});
 
       await api.createWorldSnapshot(lifeId, name.trim(), description.trim() || undefined, payloadJson);
       setName('');
