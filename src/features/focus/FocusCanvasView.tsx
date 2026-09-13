@@ -1173,7 +1173,7 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
                 <input
                   type="text"
                   required
-                  placeholder="例如：攻克顶级系统架构师、主导核心商业落地..."
+                  placeholder="例如：攻克核心系统架构师、主导业务项目落地..."
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   className="w-full bg-[#0d120f] border border-[#38483c] rounded px-3 py-1.5 text-sm font-serif text-[#e7e0cc] placeholder-[#5c6e62] focus:outline-none focus:border-strategy-gold"

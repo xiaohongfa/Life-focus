@@ -656,17 +656,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
                 <div className="flex items-center space-x-2 text-strategy-gold font-bold text-sm">
                   <Shield className="w-4 h-4" />
-                  <span>本地绝对优先架构 (Local-First Guarantee)</span>
+                  <span>本地优先架构 (Local-First Architecture)</span>
                 </div>
                 <div className="space-y-2 text-xs text-slate-300 leading-relaxed">
                   <p>
-                    • **数据存储物理路径**：本应用所有战略数据统一持久化于本机标准的 SQLite 数据库中，路径位于操作系统的 AppData / Roaming 用户本地目录。
+                    • **数据存储物理路径**：本应用所有战略数据统一持久化于本机 SQLite 数据库中。普通模式位于操作系统用户本地目录，便携模式位于同级 data 目录。
                   </p>
                   <p>
-                    • **零后台秘密上传**：除非你在国策画布或参谋部主动点击明确的 AI 按钮，否则软件永远不会向任何外部服务器发送你的任何人生数据。
+                    • **网络通信说明**：未启用第三方 AI 服务时，不会发生外部 AI 云端请求；启用云端 AI 后，相关上下文将发送给所选服务商。
                   </p>
                   <p>
-                    • **版本一致性迁移保障**：内置 SQLite 迁移引擎，未来任何新增表或字段均在保留你既有数据的可恢复边界内自动完成。
+                    • **版本迁移保障**：内置 SQLite 迁移引擎，新增表或字段通过自动化迁移脚本有序演进。
                   </p>
                 </div>
               </div>

@@ -52,7 +52,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 {this.props.fallbackTitle || '指挥所局部战报模组发生异常'}
               </h3>
               <p className="text-xs text-[#8b9b8f] mt-1 font-serif">
-                核心战时防护已阻断异常扩散，当前人生主线数据完好无损。
+                当前模组已触发隔离防护，可尝试重新加载或返回其他战报界面。
               </p>
             </div>
 

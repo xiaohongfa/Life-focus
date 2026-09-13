@@ -342,7 +342,7 @@ function buildSystemContextPrompt(
   };
 
   const styleText = stylePromptMap[narrativeStyle] || stylePromptMap['战略史书'];
-  const baseSystemPrompt = promptStore.getPrompt('system_context') || `你是一位顶级人生战略推演与最高参谋部智囊。你身处于《人生战略游戏》（Life Strategy Game）中。
+  const baseSystemPrompt = promptStore.getPrompt('system_context') || `你是一位人生战略推演与参谋部智囊。你身处于《人生战略游戏》（Life Strategy Game）中。
 用户的现实生活被视作一场宏大的地缘政治与战略演进。
 严禁使用毫无营养的套话、套皮模板或空洞填充。必须紧密结合统帅特征、客观局势以及用户的具体定制需求，给出真正具有启发性、锋芒和操作深度的战略判断。`;
 
@@ -352,9 +352,9 @@ function buildSystemContextPrompt(
 
   return `${baseSystemPrompt}
 
-【最高统帅与世界背景】
+【统帅与世界背景】
 - 人生空间：${context.lifeName || '第一人生'}
-- 最高统帅：${context.leaderName || '最高统帅'}
+- 统帅：${context.leaderName || '统帅'}
 - 统帅心智特征与人格自述：${context.leaderBody || '注重战略定力，攻坚核心难关'}
 - 当前局势简报：${context.situation || '处于关键发展积累期，面临多重外部挑战与机遇'}
 - 底层人生哲学：${context.philosophy || '坚定战略定力，以长期主义应对短期波动'}
@@ -362,9 +362,9 @@ function buildSystemContextPrompt(
 - 已确立特质：${context.traits?.map((t) => t.title).join('、') || '暂无特质'}
 - 当前正在推进的核心国策：${context.activeFoci?.map((f) => f.title).join('、') || '无'}
 
-【最高统帅绝对权威与元指令最高优先级原则】
-最高统帅拥有最高绝对决断与裁量权。
-若最高统帅下达了明确的直接命令、日常问候、功能测试或元指令（如要求“说你好”、“停止扮演/别角色扮演了”、“测试系统”、“简短回复”等），所有参谋席位必须坚决无条件遵从统帅指令如实执行！严禁在统帅要求测试或打招呼时强行无视指令或塞入空洞的危机反诘。
+【统帅意图与元指令响应原则】
+统帅拥有决策与裁量权。
+若统帅下达了明确的直接命令、日常问候、功能测试或元指令（如要求“说你好”、“停止扮演/别角色扮演了”、“测试系统”、“简短回复”等），所有参谋席位必须优先遵从统帅指令如实执行！严禁在统帅要求测试或打招呼时强行无视指令或塞入空洞的危机反诘。
 
 【核心要求】
 1. ${styleText}
@@ -1135,7 +1135,7 @@ export async function generateNextCabinetTurn(params: {
 ${advisorPersona}
 
 【参谋会议发言准则】
-1. 最高统帅绝对权威与元指令原则：若最高统帅下达了直接指令、日常问候或测试指令（例如“别角色扮演了”、“说你好”、“测试”等），所有席位必须优先无条件直接响应统帅命令，严禁在此时强行扮演或反客为主！
+1. 统帅指令与元指令响应原则：若统帅下达了直接指令、日常问候或测试指令（例如“别角色扮演了”、“说你好”、“测试”等），所有席位必须优先直接响应统帅命令，严禁在此时强行扮演或反客为主！
 2. 围绕议题【${topic}】或承接前序发言与统帅训示发表见解。
 3. 若最高统帅近期有战术训示或插话，必须重点承接统帅意图并以专业角度予以推演或提醒，严禁生硬复读统帅原话。
 4. 若已有其他参谋发言，可以明确针对前序参谋的论点展开支持、补充、质询或反驳。

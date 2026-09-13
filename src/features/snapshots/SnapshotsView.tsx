@@ -206,7 +206,7 @@ export const SnapshotsView: React.FC<SnapshotsViewProps> = ({ lifeId }) => {
             <div className="p-3 bg-sky-950/30 border border-sky-800/40 rounded text-xs text-sky-300 mb-4 flex items-center space-x-2">
               <ShieldAlert className="w-4 h-4 text-sky-400 shrink-0" />
               <span>
-                §11.3: 快照回溯为纯只读展示模式，退出后返回当前世界，绝不会擅自覆盖当前人生数据。
+                §11.3: 快照回溯为纯只读展示模式，退出后返回当前世界，不会修改或覆盖当前人生数据。
               </span>
             </div>
 
