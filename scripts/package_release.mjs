@@ -5,15 +5,14 @@ import { execSync } from 'child_process';
 const ROOT_DIR = process.cwd();
 const PKG_DIR = path.join(ROOT_DIR, 'release_distribution');
 
-// Clean and create target dir
-if (fs.existsSync(PKG_DIR)) {
-  fs.rmSync(PKG_DIR, { recursive: true, force: true });
+// Ensure target dir exists
+if (!fs.existsSync(PKG_DIR)) {
+  fs.mkdirSync(PKG_DIR, { recursive: true });
 }
-fs.mkdirSync(PKG_DIR, { recursive: true });
 
 // 1. Copy NSIS installer
 const nsisSrc = path.join(ROOT_DIR, 'src-tauri', 'target', 'release', 'bundle', 'nsis', 'life-strategy-game_0.1.0_x64-setup.exe');
-const nsisDst = path.join(PKG_DIR, '人生战略游戏_v0.1.0_安装包.exe');
+const nsisDst = path.join(PKG_DIR, '人生战略游戏_安装包.exe');
 if (fs.existsSync(nsisSrc)) {
   fs.copyFileSync(nsisSrc, nsisDst);
   console.log('✓ Copied installer to:', nsisDst);
@@ -21,9 +20,11 @@ if (fs.existsSync(nsisSrc)) {
   console.error('X Installer not found at:', nsisSrc);
 }
 
-// 2. Prepare green portable package
-const greenDir = path.join(PKG_DIR, '人生战略游戏_v0.1.0_绿色便携版');
-fs.mkdirSync(greenDir, { recursive: true });
+// 2. Prepare green portable pure package
+const greenDir = path.join(PKG_DIR, '人生战略游戏_绿色纯净版');
+if (!fs.existsSync(greenDir)) {
+  fs.mkdirSync(greenDir, { recursive: true });
+}
 
 const exeSrc = path.join(ROOT_DIR, 'src-tauri', 'target', 'release', 'life-strategy-game.exe');
 const exeDst = path.join(greenDir, '人生战略游戏.exe');
@@ -54,7 +55,7 @@ const greenReadme = `=============================================
 fs.writeFileSync(path.join(greenDir, '使用说明.txt'), greenReadme, 'utf8');
 
 // 3. Compress green portable package into zip
-const zipDst = path.join(PKG_DIR, '人生战略游戏_v0.1.0_免安装绿色版.zip');
+const zipDst = path.join(PKG_DIR, '人生战略游戏_绿色纯净版.zip');
 console.log('Compressing portable package...');
 try {
   // Use PowerShell Compress-Archive
@@ -67,19 +68,21 @@ try {
 
 // 4. Release distribution readme
 const distReadme = `======================================================
-     人生战略游戏 v0.1.0 发行分发包 (Release Distribution)
+     人生战略游戏 发行分发包 (Release Distribution)
 ======================================================
 
 您可以将本文件夹内的任意一个文件直接分享给他人使用：
 
-1. 【推荐首选】人生战略游戏_v0.1.0_安装包.exe (约 3.0 MB)
-   - 完整的 Windows 安装向导。
-   - 自动在桌面生成快捷方式，支持开始菜单与控制面板正常卸载。
-   - 体积仅约 3MB，极小极轻，可以通过微信、QQ、网盘秒发秒传。
+1. 【绿色免安装】人生战略游戏_绿色纯净版.zip (约 3.6 MB)
+   - 纯绿色压缩包，解压后双击「人生战略游戏.exe」直接打开！
+   - 无需安装向导、不写入注册表、不留垃圾残留，即开即用。
+   - 适合放在 U 盘随身携带或直接发给朋友体验。
 
-2. 【绿色免安装】人生战略游戏_v0.1.0_免安装绿色版.zip (约 3.6 MB)
-   - 纯绿色压缩包，解压后双击「人生战略游戏.exe」直接打开。
-   - 适合放在 U 盘随身携带或不想在电脑上执行安装向导的用户。
+2. 【便捷单文件】人生战略游戏_绿色纯净版/人生战略游戏.exe (约 11 MB)
+   - 绿色独立单文件，无需解压即可直接双击运行。
+
+3. 【安装向导版】人生战略游戏_安装包.exe (约 3.0 MB)
+   - 传统的标准 Windows 安装向导，自动生成桌面快捷方式。
 
 【对方运行环境要求】
 - 操作系统：Windows 10 / Windows 11 (64位)
