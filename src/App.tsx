@@ -162,7 +162,6 @@ export const App: React.FC = () => {
         lives={lives}
         currentLife={currentLife}
         stability={stability}
-        overview={overview}
         activeTab={activeTab}
         onSelectLife={handleSelectLife}
         onCreateLife={handleCreateLife}

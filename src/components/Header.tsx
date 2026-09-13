@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Life, Stability, WorldOverview } from '../api/types';
+import type { Life, Stability } from '../api/types';
 import { Shield, Plus, Compass, GitFork, User, BookOpen, Flag, Archive, Camera, Users, Settings, Trash2 } from 'lucide-react';
 import { soundFx } from '../utils/soundEffects';
 
@@ -7,7 +7,6 @@ interface HeaderProps {
   lives: Life[];
   currentLife: Life | null;
   stability: Stability | null;
-  overview?: WorldOverview | null;
   activeTab: string;
   onSelectLife: (lifeId: string) => void;
   onCreateLife: (name: string) => void;
@@ -23,7 +22,6 @@ export const Header: React.FC<HeaderProps> = ({
   lives,
   currentLife,
   stability,
-  overview,
   activeTab,
   onSelectLife,
   onCreateLife,
@@ -40,13 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   // 仪表盘绑定的真实战役数据
   const stabVal = stability?.current_value ?? 70;
   
-  // 战略士气：根据活跃与达成国策数计算
-  const activeFociCount = overview?.active_foci?.length ?? 1;
-  const moraleVal = Math.min(95, Math.max(30, 60 + activeFociCount * 5));
 
-  // 行动储备 / 财富能源：根据国家精神与内政状态计算
-  const spiritsCount = overview?.national_spirits?.length ?? 2;
-  const reserveVal = Math.min(98, Math.max(40, 50 + spiritsCount * 12));
 
 
 
@@ -98,42 +90,18 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </div>
 
-          {/* 战况即时战备通报条目 */}
-          <div className="flex items-center space-x-2 text-[11px] font-mono font-bold">
-            <button
-              onClick={() => {
-                soundFx.playClick();
-                onOpenStabilityModal();
-              }}
-              className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-[#101712] border border-[#2d3f32] text-emerald-400 hover:border-emerald-500 transition cursor-pointer"
-              title="心智稳定度（点击调节与复盘）"
-            >
-              <span>🛡️ 稳定性</span>
-              <span className="text-amber-300 font-sans">{stabVal.toFixed(0)}%</span>
-            </button>
-            <button
-              onClick={() => {
-                soundFx.playClick();
-                onSelectTab('focus');
-              }}
-              className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-[#1c160e] border border-[#48371d] text-amber-300 hover:border-amber-500 transition cursor-pointer"
-              title="战略士气（点击前往国策）"
-            >
-              <span>👥 士气</span>
-              <span className="text-yellow-200 font-sans">{moraleVal}%</span>
-            </button>
-            <button
-              onClick={() => {
-                soundFx.playClick();
-                onSelectTab('spirit');
-              }}
-              className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-[#1a1410] border border-[#48301d] text-orange-300 hover:border-orange-500 transition cursor-pointer"
-              title="行动储备（点击前往国家精神）"
-            >
-              <span>⚡ 储备</span>
-              <span className="text-amber-200 font-sans">{reserveVal}%</span>
-            </button>
-          </div>
+          {/* 核心真实战况指标：心智稳定度 */}
+          <button
+            onClick={() => {
+              soundFx.playClick();
+              onOpenStabilityModal();
+            }}
+            className="flex items-center space-x-2 px-3 py-1 rounded bg-[#101712] border border-[#2d3f32] hover:border-emerald-500 text-xs font-mono font-bold text-emerald-400 transition cursor-pointer shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]"
+            title="心智稳定度（点击调节与查看历史复盘记录）"
+          >
+            <span>🛡️ 心智稳定度</span>
+            <span className="text-amber-300 font-sans text-sm font-black">{stabVal.toFixed(0)}%</span>
+          </button>
         </div>
 
         {/* ===================== 右侧：机械拨动开关、档案切换与战略控制台 ===================== */}
