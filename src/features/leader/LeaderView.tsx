@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Trait, TraitRelation } from '../../api/types';
 import { api } from '../../api/client';
+import { useToast } from '../../components/ToastProvider';
 import {
   User,
   Plus,
@@ -205,11 +206,17 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
   const [editTraitTitle, setEditTraitTitle] = useState('');
   const [editTraitBody, setEditTraitBody] = useState('');
 
+  const toast = useToast();
+  const activeLifeIdRef = useRef(lifeId);
+  const loadSeqRef = useRef(0);
+
   useEffect(() => {
     loadData();
   }, [lifeId, includeArchived]);
 
   const loadData = async () => {
+    activeLifeIdRef.current = lifeId;
+    const currentSeq = ++loadSeqRef.current;
     try {
       const [leaderData, traitData, relData, overview] = await Promise.all([
         api.getLeader(lifeId),
@@ -217,6 +224,11 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
         api.getTraitRelations(lifeId),
         api.getWorldOverview(lifeId).catch(() => null),
       ]);
+
+      if (activeLifeIdRef.current !== lifeId || loadSeqRef.current !== currentSeq) {
+        return;
+      }
+
       if (leaderData) {
         setLeaderName(leaderData.name);
         setLeaderBody(leaderData.body_md);
@@ -237,8 +249,12 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
           activeFoci: overview.active_foci,
         });
       }
-    } catch (err) {
-      console.error('Failed to load leader data', err);
+    } catch (err: unknown) {
+      if (activeLifeIdRef.current === lifeId && loadSeqRef.current === currentSeq) {
+        console.error('Failed to load leader data', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error(`加载特质与统帅数据失败: ${msg}`);
+      }
     }
   };
 
@@ -307,9 +323,12 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
     try {
       await api.updateLeader(lifeId, leaderName, leaderBody, leaderAvatar);
       setSaveStatus('saved');
+      toast.success('统帅档案与箴言已保存');
       setTimeout(() => setSaveStatus('idle'), 2000);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to save leader', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`保存统帅档案失败: ${msg}`);
       setSaveStatus('idle');
     }
   };
@@ -320,8 +339,11 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
     setLeaderAvatar(nextAvatar);
     try {
       await api.updateLeader(lifeId, leaderName, leaderBody, nextAvatar);
-    } catch (err) {
+      toast.success('统帅战术徽记已更新');
+    } catch (err: unknown) {
       console.error('Failed to save leader avatar', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`更新统帅徽记失败: ${msg}`);
     }
     setShowAvatarModal(false);
     setCustomAvatarUrl('');
@@ -342,22 +364,20 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
   const handleOpenSubTraitsModal = (group: { id: string; masterTitle: string; rootTrait: Trait; subTraits: Trait[] }) => {
     setSelectedMasterGroup(group);
     setIsAddingSubTrait(false);
-    setNewSubTitle(`${group.masterTitle} 等级${group.subTraits.length + 1}`);
+    setNewSubTitle('');
     setNewSubBody('');
     setShowSubTraitsModal(true);
   };
 
-  // 在弹窗中直接为当前总特征追加下一阶子特征
+  // 在总特质阶梯弹窗中直接添加子特质 (下一阶段进化)
   const handleAddSubTraitSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMasterGroup || !newSubTitle.trim()) return;
-    const lastSubTrait = selectedMasterGroup.subTraits[selectedMasterGroup.subTraits.length - 1];
-
     try {
       const created = await api.createTrait(lifeId, newSubTitle.trim(), newSubBody.trim());
-      if (lastSubTrait) {
-        await api.addTraitRelation(lifeId, lastSubTrait.id, created.id, '阶梯进阶');
-      }
+      const lastSub = selectedMasterGroup.subTraits[selectedMasterGroup.subTraits.length - 1];
+      const predecessorId = lastSub ? lastSub.id : selectedMasterGroup.rootTrait.id;
+      await api.addTraitRelation(lifeId, predecessorId, created.id, '阶梯进阶');
       setNewSubTitle('');
       setNewSubBody('');
       setIsAddingSubTrait(false);
@@ -369,8 +389,11 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
           subTraits: [...prev.subTraits, created],
         };
       });
-    } catch (err) {
+      toast.success(`进阶阶梯【${created.title}】已建立`);
+    } catch (err: unknown) {
       console.error('Failed to add sub trait', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`添加特质进阶阶梯失败: ${msg}`);
     }
   };
 
@@ -379,7 +402,6 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
     if (!traitTitle.trim()) return;
     try {
       const created = await api.createTrait(lifeId, traitTitle.trim(), traitBody.trim());
-      // 若在新建时直接指定了前身特质，则原子性建立继承关系
       if (newTraitPredecessorId) {
         await api.addTraitRelation(lifeId, newTraitPredecessorId, created.id);
       }
@@ -388,17 +410,23 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
       setNewTraitPredecessorId('');
       setShowTraitModal(false);
       await loadData();
-    } catch (err) {
+      toast.success(`心智特质【${created.title}】已铸就建立`);
+    } catch (err: unknown) {
       console.error('Failed to create trait', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`铸就特质失败: ${msg}`);
     }
   };
 
   const handleArchiveTrait = async (traitId: string, currentArchived: boolean) => {
     try {
       await api.archiveTrait(lifeId, traitId, !currentArchived);
+      toast.info(currentArchived ? '特质已解封归位' : '特质已封存归档');
       loadData();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to archive trait', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`封存特质失败: ${msg}`);
     }
   };
 
@@ -406,9 +434,12 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
     if (!window.confirm(`确认删除特质「${title}」？相关演化前身关系也将移除。`)) return;
     try {
       await api.deleteTrait(lifeId, traitId);
+      toast.info(`特质【${title}】已撤除`);
       loadData();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to delete trait', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`撤除特质失败: ${msg}`);
     }
   };
 
@@ -440,8 +471,11 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
           };
         });
       }
-    } catch (err) {
+      toast.success('特质已修订保存');
+    } catch (err: unknown) {
       console.error('Failed to update trait', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`保存特质失败: ${msg}`);
     }
   };
 
@@ -457,19 +491,22 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
             ...prev,
             subTraits: prev.subTraits.map((item) => ({
               ...item,
-              icon: item.id === activeTraitId ? 'active' : undefined,
+              equip_state: item.id === activeTraitId ? 'active' : 'unequipped',
             })),
           };
         });
       }
-    } catch (err) {
+      toast.success('活跃特质阶梯已标定上阵');
+    } catch (err: unknown) {
       console.error('Failed to set active trait stage', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`标定特质阶梯失败: ${msg}`);
     }
   };
 
   const handleToggleEquipGroup = async (group: { id: string; subTraits: Trait[] }, equip: boolean, targetStageId?: string) => {
     const groupTraitIds = group.subTraits.map((t) => t.id);
-    const targetId = targetStageId || group.subTraits.find((t) => t.icon === 'active')?.id || group.subTraits[0]?.id;
+    const targetId = targetStageId || group.subTraits.find((t) => t.equip_state === 'active' || t.icon === 'active')?.id || group.subTraits[0]?.id;
     try {
       if (equip) {
         soundFx.playMedalEquip();
@@ -485,13 +522,16 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
             ...prev,
             subTraits: prev.subTraits.map((item) => ({
               ...item,
-              icon: !equip ? 'benched' : item.id === targetId ? 'active' : undefined,
+              equip_state: !equip ? 'benched' : item.id === targetId ? 'active' : 'unequipped',
             })),
           };
         });
       }
-    } catch (err) {
+      toast.success(equip ? '特质谱系已上阵激活' : '特质谱系已转入待命');
+    } catch (err: unknown) {
       console.error('Failed to toggle trait equip status', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`切换特质上阵状态失败: ${msg}`);
     }
   };
 
@@ -499,8 +539,11 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
     try {
       await api.deleteTraitRelation(lifeId, relationId);
       await loadData();
-    } catch (err) {
+      toast.info('演化关系已解除');
+    } catch (err: unknown) {
       console.error('Failed to delete trait relation', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`解除演化关系失败: ${msg}`);
     }
   };
 
@@ -521,8 +564,11 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
       setEvolutionNote('');
       setShowEvolutionModal(false);
       await loadData();
-    } catch (err) {
+      toast.success('特质脉络演化关系已确立');
+    } catch (err: unknown) {
       console.error('Failed to add trait evolution relation', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`建立演化关系失败: ${msg}`);
     }
   };
 

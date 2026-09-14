@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Ideology } from '../../api/types';
 import { api } from '../../api/client';
+import { useToast } from '../../components/ToastProvider';
 import { BookOpen, Compass, Plus, Archive, Check, Sparkles, Edit3, Trash2, X } from 'lucide-react';
 import { AICommandModal } from '../../components/AICommandModal';
 import { AIProposalModal } from '../../components/AIProposalModal';
@@ -37,11 +38,17 @@ export const IdeologyPhilosophyView: React.FC<IdeologyPhilosophyViewProps> = ({ 
   const [proposedText, setProposedText] = useState('');
   const [strategyContext, setStrategyContext] = useState<StrategyContext>({});
 
+  const toast = useToast();
+  const activeLifeIdRef = useRef(lifeId);
+  const loadSeqRef = useRef(0);
+
   useEffect(() => {
     loadData();
   }, [lifeId]);
 
   const loadData = async () => {
+    activeLifeIdRef.current = lifeId;
+    const currentSeq = ++loadSeqRef.current;
     try {
       const [ideoData, philData, sitData, overview] = await Promise.all([
         api.getIdeologies(lifeId, true),
@@ -49,6 +56,11 @@ export const IdeologyPhilosophyView: React.FC<IdeologyPhilosophyViewProps> = ({ 
         api.getSituation(lifeId),
         api.getWorldOverview(lifeId).catch(() => null),
       ]);
+
+      if (activeLifeIdRef.current !== lifeId || loadSeqRef.current !== currentSeq) {
+        return;
+      }
+
       setIdeologies(ideoData);
       if (philData) setPhilosophyText(philData.body_md);
       if (sitData) setSituationText(sitData.body_md);
@@ -65,8 +77,12 @@ export const IdeologyPhilosophyView: React.FC<IdeologyPhilosophyViewProps> = ({ 
           activeFoci: overview.active_foci,
         });
       }
-    } catch (err) {
-      console.error('Failed to load ideology/philosophy data', err);
+    } catch (err: unknown) {
+      if (activeLifeIdRef.current === lifeId && loadSeqRef.current === currentSeq) {
+        console.error('Failed to load ideology/philosophy data', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error(`加载哲学与局势数据失败: ${msg}`);
+      }
     }
   };
 
@@ -110,9 +126,12 @@ export const IdeologyPhilosophyView: React.FC<IdeologyPhilosophyViewProps> = ({ 
     try {
       await api.updatePhilosophy(lifeId, philosophyText);
       setPhilSaveStatus('saved');
+      toast.success('根本人生哲学已镌刻保存');
       setTimeout(() => setPhilSaveStatus('idle'), 2000);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to save philosophy', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`保存人生哲学失败: ${msg}`);
       setPhilSaveStatus('idle');
     }
   };
@@ -122,9 +141,12 @@ export const IdeologyPhilosophyView: React.FC<IdeologyPhilosophyViewProps> = ({ 
     try {
       await api.updateSituation(lifeId, situationText);
       setSitSaveStatus('saved');
+      toast.success('当前战略局势备忘已更新');
       setTimeout(() => setSitSaveStatus('idle'), 2000);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to save situation', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`保存战略局势失败: ${msg}`);
       setSitSaveStatus('idle');
     }
   };
@@ -138,17 +160,23 @@ export const IdeologyPhilosophyView: React.FC<IdeologyPhilosophyViewProps> = ({ 
       setNewTitle('');
       setNewBodyMd('');
       setShowIdeologyModal(false);
-    } catch (err) {
+      toast.success(`意识形态【${created.title}】已立案奉行`);
+    } catch (err: unknown) {
       console.error('Failed to create ideology', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`创建意识形态失败: ${msg}`);
     }
   };
 
   const handleArchiveIdeology = async (id: string, currentArchived: boolean) => {
     try {
       await api.archiveIdeology(lifeId, id, !currentArchived);
+      toast.info(currentArchived ? '意识形态已解封启用' : '意识形态已封存归档');
       loadData();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to archive ideology', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`封存意识形态失败: ${msg}`);
     }
   };
 
@@ -167,8 +195,11 @@ export const IdeologyPhilosophyView: React.FC<IdeologyPhilosophyViewProps> = ({ 
       setShowEditModal(false);
       setEditingIdeology(null);
       await loadData();
-    } catch (err) {
+      toast.success('意识形态已修订更新');
+    } catch (err: unknown) {
       console.error('Failed to update ideology', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`更新意识形态失败: ${msg}`);
     }
   };
 
@@ -176,9 +207,12 @@ export const IdeologyPhilosophyView: React.FC<IdeologyPhilosophyViewProps> = ({ 
     if (!window.confirm(`确认彻底删除意识形态「${title}」？此操作不可撤销。`)) return;
     try {
       await api.deleteIdeology(lifeId, id);
+      toast.info(`意识形态【${title}】已彻底撤销`);
       await loadData();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to delete ideology', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`撤除意识形态失败: ${msg}`);
     }
   };
 

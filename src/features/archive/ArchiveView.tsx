@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { ArchiveItem, Event, Essay } from '../../api/types';
 import { api } from '../../api/client';
 import { SuperEventModal } from '../../components/SuperEventModal';
+import { useToast } from '../../components/ToastProvider';
 import { Archive, Plus, AlertCircle, Camera, BookOpen, GitCommit, Filter, Sparkles, PenLine } from 'lucide-react';
 import { soundFx } from '../../utils/soundEffects';
 
@@ -27,17 +28,30 @@ export const ArchiveView: React.FC<ArchiveViewProps> = ({ lifeId, onWriteEssay, 
   const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
   const [eventQuote, setEventQuote] = useState('');
 
+  const toast = useToast();
+  const activeLifeIdRef = useRef(lifeId);
+  const loadSeqRef = useRef(0);
+
   useEffect(() => {
     loadArchive();
   }, [lifeId, filterType]);
 
   const loadArchive = async () => {
+    activeLifeIdRef.current = lifeId;
+    const currentSeq = ++loadSeqRef.current;
     try {
       const typeParam = filterType === 'all' ? undefined : filterType;
       const data = await api.getArchiveFeed(lifeId, typeParam);
+      if (activeLifeIdRef.current !== lifeId || loadSeqRef.current !== currentSeq) {
+        return;
+      }
       setItems(data);
-    } catch (err) {
-      console.error('Failed to load archive feed', err);
+    } catch (err: unknown) {
+      if (activeLifeIdRef.current === lifeId && loadSeqRef.current === currentSeq) {
+        console.error('Failed to load archive feed', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error(`加载战略档案流失败: ${msg}`);
+      }
     }
   };
 
@@ -58,12 +72,15 @@ export const ArchiveView: React.FC<ArchiveViewProps> = ({ lifeId, onWriteEssay, 
       setEventQuote('');
       setShowEventModal(false);
       await loadArchive();
+      toast.success(eventKind === 'super' ? `【超大事件】已发生并载入史册` : `大事记【${created.title}】已收录归档`);
       if (created && created.kind === 'super') {
         setSelectedSuperEvent(created);
         setIsSuperModalOpen(true);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to create event', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`收录大事记失败: ${msg}`);
     }
   };
 

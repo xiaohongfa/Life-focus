@@ -45,6 +45,7 @@ import {
 } from '../../services/llmService';
 import { AICommandModal } from '../../components/AICommandModal';
 import { AIProposalModal } from '../../components/AIProposalModal';
+import { useToast } from '../../components/ToastProvider';
 
 interface FocusCanvasViewProps {
   lifeId: string;
@@ -69,6 +70,10 @@ interface AIProposalItem {
 }
 
 export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
+  const toast = useToast();
+  const activeLifeIdRef = useRef(lifeId);
+  const loadSeqRef = useRef(0);
+
   const [foci, setFoci] = useState<Focus[]>([]);
   const [relations, setRelations] = useState<FocusRelation[]>([]);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -206,6 +211,8 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
   );
 
   const loadData = useCallback(async () => {
+    activeLifeIdRef.current = lifeId;
+    const currentSeq = ++loadSeqRef.current;
     try {
       const [fociData, relData, allSubFoci, overview] = await Promise.all([
         api.getFoci(lifeId),
@@ -213,6 +220,10 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
         api.listAllSubFoci(lifeId),
         api.getWorldOverview(lifeId).catch(() => null),
       ]);
+
+      if (activeLifeIdRef.current !== lifeId || loadSeqRef.current !== currentSeq) {
+        return;
+      }
 
       if (overview) {
         setStrategyContext({
@@ -252,14 +263,22 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
           reactFlowInstanceRef.current?.fitView({ padding: 0.3, maxZoom: 1.2, duration: 300 });
         }, 100);
       }
-    } catch (err) {
-      console.error('Failed to load focus canvas data', err);
+    } catch (err: unknown) {
+      if (activeLifeIdRef.current === lifeId && loadSeqRef.current === currentSeq) {
+        console.error('Failed to load focus canvas data', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error(`加载国策树数据失败: ${msg}`);
+      }
     }
-  }, [lifeId, syncNodesFromFoci, syncEdgesFromRelations]);
+  }, [lifeId, syncNodesFromFoci, syncEdgesFromRelations, toast]);
 
   useEffect(() => {
+    isInitialFitDoneRef.current = false;
+    setNodes([]);
+    setEdges([]);
+    setSelectedFocus(null);
     loadData();
-  }, [loadData]);
+  }, [lifeId, loadData, setNodes, setEdges]);
 
   // Save node content edits
   const handleSaveNodeContent = async () => {
@@ -274,8 +293,10 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
       syncNodesFromFoci(updatedFoci);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to save focus content', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`保存国策内容失败: ${msg}`);
       setSaveStatus('idle');
     }
   };
@@ -340,11 +361,14 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
         setRelations(nextRelations);
         syncEdgesFromRelations(nextRelations);
         setUndoStack((prev) => [...prev, { type: 'ADD_RELATION', relation: rel }]);
-      } catch (err) {
+        toast.success('路线连线已确立');
+      } catch (err: unknown) {
         console.error('Failed to add focus relation', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error(`建立国策联系失败: ${msg}`);
       }
     },
-    [lifeId, connectionMode, relations, syncEdgesFromRelations]
+    [lifeId, connectionMode, relations, syncEdgesFromRelations, toast]
   );
 
   // Status transition handler (§7.2: 四状态任意流转)
@@ -379,8 +403,11 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
       ]);
       const hist = await api.getFocusHistory(lifeId, selectedFocus.id);
       setFocusHistory(hist);
-    } catch (err) {
+      toast.success(`国策状态已流转为【${targetStatus}】`);
+    } catch (err: unknown) {
       console.error('Failed to update focus status', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`更新国策状态失败: ${msg}`);
     }
   };
 
@@ -407,9 +434,12 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
         ...prev,
         { type: 'DELETE_NODE', focus: selectedFocus, relations: associatedRels },
       ]);
+      toast.info(`国策【${selectedFocus.title}】已撤除`);
       setSelectedFocus(null);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to delete focus', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`撤除国策失败: ${msg}`);
     }
   };
 
@@ -423,8 +453,11 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
       setRelations(nextRels);
       syncEdgesFromRelations(nextRels);
       setUndoStack((prev) => [...prev, { type: 'DELETE_RELATION', relation: rel }]);
-    } catch (err) {
+      toast.info('路线联系已解绑');
+    } catch (err: unknown) {
       console.error('Failed to delete relation', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`解绑路线联系失败: ${msg}`);
     }
   };
 
@@ -595,8 +628,11 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
       setSelectedFocus(created);
       setEditTitle(created.title);
       setEditBodyMd(created.body_md);
-    } catch (err) {
+      toast.success(`国策【${created.title}】已立项制定`);
+    } catch (err: unknown) {
       console.error('Failed to create focus', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`创建国策失败: ${msg}`);
     }
   };
 

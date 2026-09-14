@@ -32,6 +32,7 @@ import {
 import { MarkdownRenderer } from '../../components/MarkdownRenderer';
 import { MarkdownEditor } from '../../components/MarkdownEditor';
 import { soundFx } from '../../utils/soundEffects';
+import { useToast } from '../../components/ToastProvider';
 
 interface CabinetViewProps {
   lifeId: string;
@@ -142,6 +143,10 @@ export const CabinetView: React.FC<CabinetViewProps> = ({ lifeId, onOpenSettings
   // Read Past Meeting Modal
   const [readingMeeting, setReadingMeeting] = useState<StaffMeeting | null>(null);
 
+  const toast = useToast();
+  const activeLifeIdRef = useRef(lifeId);
+  const loadSeqRef = useRef(0);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const commanderInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -152,23 +157,36 @@ export const CabinetView: React.FC<CabinetViewProps> = ({ lifeId, onOpenSettings
   }, [members]);
 
   const loadData = useCallback(async () => {
+    activeLifeIdRef.current = lifeId;
+    const currentSeq = ++loadSeqRef.current;
     setLoading(true);
     try {
       const [membersData, meetingsData] = await Promise.all([
         api.getStaffMembers(lifeId),
         api.getStaffMeetings(lifeId),
       ]);
+
+      if (activeLifeIdRef.current !== lifeId || loadSeqRef.current !== currentSeq) {
+        return;
+      }
+
       setMembers(membersData || []);
       setMeetings(meetingsData || []);
       setSelectedMemberIds(
         (membersData || []).filter((m) => m.enabled).map((m) => m.id)
       );
-    } catch (err) {
-      console.error('Failed to load cabinet data:', err);
+    } catch (err: unknown) {
+      if (activeLifeIdRef.current === lifeId && loadSeqRef.current === currentSeq) {
+        console.error('Failed to load cabinet data:', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error(`加载总参谋部数据失败: ${msg}`);
+      }
     } finally {
-      setLoading(false);
+      if (activeLifeIdRef.current === lifeId && loadSeqRef.current === currentSeq) {
+        setLoading(false);
+      }
     }
-  }, [lifeId]);
+  }, [lifeId, toast]);
 
   useEffect(() => {
     loadData();
@@ -206,22 +224,29 @@ export const CabinetView: React.FC<CabinetViewProps> = ({ lifeId, onOpenSettings
           prompt.trim(),
           current ? current.enabled : true
         );
+        toast.success(`参谋【${name.trim()}】档案已更新`);
       } else {
         await api.createStaffMember(lifeId, name.trim(), role.trim(), prompt.trim());
+        toast.success(`参谋【${name.trim()}】已入驻总参谋部`);
       }
       setShowMemberModal(false);
       await loadData();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to save staff member:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`保存参谋席位失败: ${msg}`);
     }
   };
 
   const handleToggleMember = async (m: StaffMember) => {
     try {
       await api.updateStaffMember(lifeId, m.id, m.name, m.role, m.prompt, !m.enabled);
+      toast.info(!m.enabled ? `参谋【${m.name}】已列席参会` : `参谋【${m.name}】已休会`);
       await loadData();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to toggle staff member:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`调整参谋状态失败: ${msg}`);
     }
   };
 
@@ -229,9 +254,12 @@ export const CabinetView: React.FC<CabinetViewProps> = ({ lifeId, onOpenSettings
     if (!window.confirm(`确认解散参谋席位「${title}」？`)) return;
     try {
       await api.deleteStaffMember(lifeId, memberId);
+      toast.info(`参谋席位【${title}】已撤销解散`);
       await loadData();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to delete staff member:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`解散参谋席位失败: ${msg}`);
     }
   };
 
@@ -435,8 +463,11 @@ export const CabinetView: React.FC<CabinetViewProps> = ({ lifeId, onOpenSettings
       setGeneratedMinutes(null);
       setChatMessages([]);
       await loadData();
-    } catch (err) {
+      toast.success('参谋部推演决议与备忘录已正式签署归档');
+    } catch (err: unknown) {
       console.error('Failed to confirm meeting minutes:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`签署参谋备忘录失败: ${msg}`);
     } finally {
       setIsSavingMeeting(false);
     }

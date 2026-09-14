@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { NationalSpirit } from '../../api/types';
 import { api } from '../../api/client';
+import { useToast } from '../../components/ToastProvider';
 import { Flag, Plus, Archive, Edit3, Trash2, X } from 'lucide-react';
 import { soundFx } from '../../utils/soundEffects';
 
@@ -21,16 +22,29 @@ export const NationalSpiritView: React.FC<NationalSpiritViewProps> = ({ lifeId }
   const [editTitle, setEditTitle] = useState('');
   const [editBodyMd, setEditBodyMd] = useState('');
 
+  const toast = useToast();
+  const activeLifeIdRef = useRef(lifeId);
+  const loadSeqRef = useRef(0);
+
   useEffect(() => {
     loadData();
   }, [lifeId, includeArchived]);
 
   const loadData = async () => {
+    activeLifeIdRef.current = lifeId;
+    const currentSeq = ++loadSeqRef.current;
     try {
       const data = await api.getNationalSpirits(lifeId, includeArchived);
+      if (activeLifeIdRef.current !== lifeId || loadSeqRef.current !== currentSeq) {
+        return;
+      }
       setSpirits(data);
-    } catch (err) {
-      console.error('Failed to load national spirits', err);
+    } catch (err: unknown) {
+      if (activeLifeIdRef.current === lifeId && loadSeqRef.current === currentSeq) {
+        console.error('Failed to load national spirits', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error(`加载国家精神数据失败: ${msg}`);
+      }
     }
   };
 
@@ -43,17 +57,23 @@ export const NationalSpiritView: React.FC<NationalSpiritViewProps> = ({ lifeId }
       setTitle('');
       setBodyMd('');
       setShowModal(false);
-    } catch (err) {
+      toast.success(`国家精神【${created.title}】已成立生效`);
+    } catch (err: unknown) {
       console.error('Failed to create spirit', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`成立国家精神失败: ${msg}`);
     }
   };
 
   const handleArchive = async (id: string, currentArchived: boolean) => {
     try {
       await api.archiveNationalSpirit(lifeId, id, !currentArchived);
+      toast.info(currentArchived ? '国家精神已解除封存' : '国家精神已封存归档');
       loadData();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to archive spirit', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`封存国家精神失败: ${msg}`);
     }
   };
 
@@ -72,8 +92,11 @@ export const NationalSpiritView: React.FC<NationalSpiritViewProps> = ({ lifeId }
       setShowEditModal(false);
       setEditingSpirit(null);
       await loadData();
-    } catch (err) {
+      toast.success('国家精神已修订保存');
+    } catch (err: unknown) {
       console.error('Failed to update spirit', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`更新国家精神失败: ${msg}`);
     }
   };
 
@@ -81,9 +104,12 @@ export const NationalSpiritView: React.FC<NationalSpiritViewProps> = ({ lifeId }
     if (!window.confirm(`确认彻底删除国家精神「${title}」？此操作不可撤销。`)) return;
     try {
       await api.deleteNationalSpirit(lifeId, id);
+      toast.info(`国家精神【${title}】已彻底注销`);
       await loadData();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to delete spirit', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`删除国家精神失败: ${msg}`);
     }
   };
 
