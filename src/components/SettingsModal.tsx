@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../api/client';
+import { api, isTauri } from '../api/client';
 import {
   Settings,
   X,
@@ -323,10 +323,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 1: AI MODEL CONFIG */}
           {activeSubTab === 'ai' && (
             <form onSubmit={handleSaveAiConfig} className="space-y-4">
-              <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-lg text-xs text-slate-400 leading-relaxed">
-                <span className="text-strategy-gold font-bold">本地隐私承诺：</span>
-                API Key 仅保存在你的本机安全存储中，绝不写入人生 SQLite 数据库或云端同步，也不会在导出文件中泄露。
-              </div>
+              {isTauri ? (
+                <div className="p-3 bg-slate-950/60 border border-emerald-500/30 rounded-lg text-xs text-slate-400 leading-relaxed">
+                  <span className="text-emerald-400 font-bold">系统级安全凭证隔离：</span>
+                  桌面客户端模式下，API Key 由系统凭据管理器（Credential Manager / Keychain / Secret Service）加密托管，绝不写入普通文件、数据库或云端，导出档案时严格隔离。
+                </div>
+              ) : (
+                <div className="p-3 bg-amber-950/40 border border-amber-500/40 rounded-lg text-xs text-amber-200/90 leading-relaxed">
+                  <span className="text-amber-400 font-bold">⚠️ 浏览器开发预览模式：</span>
+                  当前处于网页开发预览环境，凭据仅保存在当前浏览器临时缓存（localStorage），未启用操作系统级凭证保护。正式使用与生产部署请运行 Tauri 桌面客户端。
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1.5">

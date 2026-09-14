@@ -495,5 +495,57 @@ fn test_trait_equip_state_migration_and_integrity() {
     assert!(json_str.contains("\"version\": 2"));
 }
 
+#[test]
+fn test_export_security_and_isolation() {
+    let state = DbState::in_memory().unwrap();
+    let mut conn = state.conn.lock().unwrap();
+
+    let life_a = Repository::create_life(&mut conn, "绝密世界A").unwrap();
+    let life_b = Repository::create_life(&mut conn, "绝密世界B").unwrap();
+
+    Repository::create_focus(
+        &mut conn,
+        &life_a.id,
+        "A的专属国策",
+        "保密内容A",
+        None,
+        None,
+        "active",
+        0.0,
+        0.0,
+    )
+    .unwrap();
+
+    Repository::create_focus(
+        &mut conn,
+        &life_b.id,
+        "B的专属国策",
+        "保密内容B",
+        None,
+        None,
+        "active",
+        0.0,
+        0.0,
+    )
+    .unwrap();
+
+    // 1. 验证 JSON 导出严格隔离且无任何 API 密钥泄漏
+    let json_a = Repository::export_life_json(&conn, &life_a.id).unwrap();
+    assert!(json_a.contains("A的专属国策"));
+    assert!(!json_a.contains("B的专属国策"));
+    assert!(!json_a.contains("保密内容B"));
+    assert!(!json_a.contains("api_key"));
+    assert!(!json_a.contains("apiKey"));
+    assert!(!json_a.contains("Bearer"));
+
+    // 2. 验证 Markdown 导出严格隔离
+    let md_a = Repository::export_life_markdown(&conn, &life_a.id).unwrap();
+    assert!(md_a.contains("绝密世界A"));
+    assert!(md_a.contains("A的专属国策"));
+    assert!(!md_a.contains("绝密世界B"));
+    assert!(!md_a.contains("B的专属国策"));
+    assert!(!md_a.contains("api_key"));
+}
+
 
 
