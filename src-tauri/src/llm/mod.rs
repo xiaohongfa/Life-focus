@@ -1,10 +1,10 @@
 pub mod key_store;
 pub mod provider;
 
-use std::sync::Arc;
-use tauri::State;
 pub use key_store::{KeyStore, LlmConfigView};
 pub use provider::{ChatMessage, LlmChatRequest, LlmTestRequest};
+use std::sync::Arc;
+use tauri::State;
 
 pub struct LlmState {
     pub key_store: Arc<KeyStore>,
@@ -23,7 +23,9 @@ pub fn llm_save_config(
     model: String,
     api_key: Option<String>,
 ) -> Result<LlmConfigView, String> {
-    state.key_store.save_config(provider, base_url, model, api_key)
+    state
+        .key_store
+        .save_config(provider, base_url, model, api_key)
 }
 
 #[tauri::command]

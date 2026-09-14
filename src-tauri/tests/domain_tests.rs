@@ -7,8 +7,10 @@ fn test_migrations_and_life_isolation() {
     let mut conn = state.conn.lock().unwrap();
 
     // 1. 创建两个独立的人生世界 Life A 与 Life B
-    let life_a = Repository::create_life(&mut conn, "人生A · 学术路线").expect("failed to create life A");
-    let life_b = Repository::create_life(&mut conn, "人生B · 商业创业").expect("failed to create life B");
+    let life_a =
+        Repository::create_life(&mut conn, "人生A · 学术路线").expect("failed to create life A");
+    let life_b =
+        Repository::create_life(&mut conn, "人生B · 商业创业").expect("failed to create life B");
 
     assert_ne!(life_a.id, life_b.id);
 
@@ -60,19 +62,25 @@ fn test_stability_arbitrary_value_and_history() {
     assert_eq!(init_stab.current_value, None);
 
     // 设置为超界数值 135
-    let change1 = Repository::set_stability(&mut conn, &life.id, 135.0, Some("重大突破"), None, None).unwrap();
+    let change1 =
+        Repository::set_stability(&mut conn, &life.id, 135.0, Some("重大突破"), None, None)
+            .unwrap();
     assert_eq!(change1.before_value, None);
     assert_eq!(change1.after_value, 135.0);
     assert_eq!(change1.delta, None);
 
     // 设置为负数 -20
-    let change2 = Repository::set_stability(&mut conn, &life.id, -20.0, Some("外在危机"), None, None).unwrap();
+    let change2 =
+        Repository::set_stability(&mut conn, &life.id, -20.0, Some("外在危机"), None, None)
+            .unwrap();
     assert_eq!(change2.before_value, Some(135.0));
     assert_eq!(change2.after_value, -20.0);
     assert_eq!(change2.delta, Some(-155.0));
 
     // 手动增减 +5 => -15
-    let change3 = Repository::set_stability(&mut conn, &life.id, -15.0, Some("调整心态"), None, None).unwrap();
+    let change3 =
+        Repository::set_stability(&mut conn, &life.id, -15.0, Some("调整心态"), None, None)
+            .unwrap();
     assert_eq!(change3.before_value, Some(-20.0));
     assert_eq!(change3.after_value, -15.0);
     assert_eq!(change3.delta, Some(5.0));
@@ -80,8 +88,6 @@ fn test_stability_arbitrary_value_and_history() {
     let history = Repository::get_stability_history(&conn, &life.id, 10).unwrap();
     assert_eq!(history.len(), 3);
 }
-
-
 
 #[test]
 fn test_unified_archive_aggregation() {
@@ -100,7 +106,8 @@ fn test_unified_archive_aggregation() {
         None,
         None,
         None,
-    ).unwrap();
+    )
+    .unwrap();
 
     Repository::create_event(
         &conn,
@@ -112,7 +119,8 @@ fn test_unified_archive_aggregation() {
         None,
         Some("历史由此改变"),
         None,
-    ).unwrap();
+    )
+    .unwrap();
 
     // 插入随笔
     Repository::create_essay(&conn, &life.id, "关于战略重心的思考", "阶段性复盘...").unwrap();
@@ -128,8 +136,18 @@ fn test_unified_archive_aggregation() {
         "active",
         0.0,
         0.0,
-    ).unwrap();
-    Repository::update_focus_status(&mut conn, &life.id, &focus.id, "completed", Some("阶段目标达成"), None, None).unwrap();
+    )
+    .unwrap();
+    Repository::update_focus_status(
+        &mut conn,
+        &life.id,
+        &focus.id,
+        "completed",
+        Some("阶段目标达成"),
+        None,
+        None,
+    )
+    .unwrap();
 
     // 验证 Archive 聚合查询 (A19 / §10: 无物理实体表，统一展示层按时间倒序)
     let feed = Repository::get_archive_feed(&conn, &life.id, None).unwrap();
@@ -154,7 +172,8 @@ fn test_focus_canvas_operations_and_relations() {
         "active",
         120.0,
         180.0,
-    ).unwrap();
+    )
+    .unwrap();
 
     let focus_b = Repository::create_focus(
         &mut conn,
@@ -166,7 +185,8 @@ fn test_focus_canvas_operations_and_relations() {
         "paused",
         350.0,
         180.0,
-    ).unwrap();
+    )
+    .unwrap();
 
     // 2. 建立互斥关系 (A 与 B 互斥路线，§7.3)
     let rel_mutex = Repository::add_focus_relation(
@@ -176,7 +196,8 @@ fn test_focus_canvas_operations_and_relations() {
         &focus_b.id,
         "mutually_exclusive",
         Some("全日制深造与全职工作时间冲突"),
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(rel_mutex.relation_type, "mutually_exclusive");
 
     // 3. 建立第三个后继节点 C 并连前置路线 (A -> C 前置，§7.3)
@@ -190,7 +211,8 @@ fn test_focus_canvas_operations_and_relations() {
         "paused",
         120.0,
         360.0,
-    ).unwrap();
+    )
+    .unwrap();
 
     let rel_pre = Repository::add_focus_relation(
         &conn,
@@ -199,7 +221,8 @@ fn test_focus_canvas_operations_and_relations() {
         &focus_c.id,
         "prerequisite",
         Some("前置学术积累"),
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(rel_pre.relation_type, "prerequisite");
 
     // 4. 验证连线查询
@@ -215,7 +238,8 @@ fn test_focus_canvas_operations_and_relations() {
         "更新后的长期战略正文描述",
         None,
         None,
-    ).unwrap();
+    )
+    .unwrap();
 
     Repository::update_focus_position(&conn, &life.id, &focus_a.id, 150.0, 200.0).unwrap();
 
@@ -226,9 +250,36 @@ fn test_focus_canvas_operations_and_relations() {
     assert_eq!(updated_a.position_y, 200.0);
 
     // 6. 四状态往返流转与历史记录 (§7.2 / A06)
-    Repository::update_focus_status(&mut conn, &life.id, &focus_a.id, "completed", Some("论文通过答辩"), None, None).unwrap();
-    Repository::update_focus_status(&mut conn, &life.id, &focus_a.id, "revoked", Some("决定撤销重选"), None, None).unwrap();
-    Repository::update_focus_status(&mut conn, &life.id, &focus_a.id, "active", Some("重新启动该战略"), None, None).unwrap();
+    Repository::update_focus_status(
+        &mut conn,
+        &life.id,
+        &focus_a.id,
+        "completed",
+        Some("论文通过答辩"),
+        None,
+        None,
+    )
+    .unwrap();
+    Repository::update_focus_status(
+        &mut conn,
+        &life.id,
+        &focus_a.id,
+        "revoked",
+        Some("决定撤销重选"),
+        None,
+        None,
+    )
+    .unwrap();
+    Repository::update_focus_status(
+        &mut conn,
+        &life.id,
+        &focus_a.id,
+        "active",
+        Some("重新启动该战略"),
+        None,
+        None,
+    )
+    .unwrap();
 
     let history = Repository::get_focus_history(&conn, &life.id, Some(&focus_a.id)).unwrap();
     assert_eq!(history.len(), 4); // 初始创建 + 3 次流转
@@ -252,10 +303,13 @@ fn test_trait_relation_delete() {
     let life = Repository::create_life(&mut conn, "测试人生 · 特质解绑").unwrap();
 
     // 特质创建与解绑关系 (delete_trait_relation)
-    let t1 = Repository::create_trait(&conn, &life.id, "三角洲能力等级一", "初阶心智", None).unwrap();
-    let t2 = Repository::create_trait(&conn, &life.id, "三角洲能力等级二", "进阶心智", None).unwrap();
+    let t1 =
+        Repository::create_trait(&conn, &life.id, "三角洲能力等级一", "初阶心智", None).unwrap();
+    let t2 =
+        Repository::create_trait(&conn, &life.id, "三角洲能力等级二", "进阶心智", None).unwrap();
 
-    let rel = Repository::add_trait_relation(&conn, &life.id, &t1.id, &t2.id, Some("演化")).unwrap();
+    let rel =
+        Repository::add_trait_relation(&conn, &life.id, &t1.id, &t2.id, Some("演化")).unwrap();
     let rels = Repository::get_trait_relations(&conn, &life.id).unwrap();
     assert_eq!(rels.len(), 1);
 
@@ -273,7 +327,13 @@ fn test_essay_crud() {
     let life = Repository::create_life(&mut conn, "随笔测试空间").unwrap();
 
     // 1. 创建随笔
-    let essay = Repository::create_essay(&conn, &life.id, "初期战略反思", "关于第一阶段攻坚的心得体会。").unwrap();
+    let essay = Repository::create_essay(
+        &conn,
+        &life.id,
+        "初期战略反思",
+        "关于第一阶段攻坚的心得体会。",
+    )
+    .unwrap();
     assert_eq!(essay.title, "初期战略反思");
     assert_eq!(essay.body_md, "关于第一阶段攻坚的心得体会。");
 
@@ -281,7 +341,14 @@ fn test_essay_crud() {
     assert_eq!(list1.len(), 1);
 
     // 2. 更新随笔
-    let updated = Repository::update_essay(&conn, &life.id, &essay.id, "初期战略反思 (修订版)", "深化复盘：增加反思与次要路线剪枝。").unwrap();
+    let updated = Repository::update_essay(
+        &conn,
+        &life.id,
+        &essay.id,
+        "初期战略反思 (修订版)",
+        "深化复盘：增加反思与次要路线剪枝。",
+    )
+    .unwrap();
     assert_eq!(updated.title, "初期战略反思 (修订版)");
     assert_eq!(updated.body_md, "深化复盘：增加反思与次要路线剪枝。");
 
@@ -313,7 +380,15 @@ fn test_trait_and_ideology_and_spirit_crud_and_delete_life() {
     let t2 = Repository::create_trait(&conn, &life.id, "能力等级二", "进阶能力", None).unwrap();
     Repository::add_trait_relation(&conn, &life.id, &t1.id, &t2.id, None).unwrap();
 
-    let updated_t1 = Repository::update_trait(&conn, &life.id, &t1.id, "能力基础 (修订)", "扎实初阶能力", None).unwrap();
+    let updated_t1 = Repository::update_trait(
+        &conn,
+        &life.id,
+        &t1.id,
+        "能力基础 (修订)",
+        "扎实初阶能力",
+        None,
+    )
+    .unwrap();
     assert_eq!(updated_t1.title, "能力基础 (修订)");
 
     // 设置 t2 为当前阶段
@@ -327,8 +402,17 @@ fn test_trait_and_ideology_and_spirit_crud_and_delete_life() {
     assert_eq!(t1_fetched.equip_state.as_deref(), Some("unequipped"));
 
     // 2. Ideology update & delete
-    let ideo = Repository::create_ideology(&conn, &life.id, "原初自由意志", "强调探索与实验", None).unwrap();
-    let updated_ideo = Repository::update_ideology(&conn, &life.id, &ideo.id, "知行合一", "知者行之始，行者知之成", None).unwrap();
+    let ideo = Repository::create_ideology(&conn, &life.id, "原初自由意志", "强调探索与实验", None)
+        .unwrap();
+    let updated_ideo = Repository::update_ideology(
+        &conn,
+        &life.id,
+        &ideo.id,
+        "知行合一",
+        "知者行之始，行者知之成",
+        None,
+    )
+    .unwrap();
     assert_eq!(updated_ideo.title, "知行合一");
     assert_eq!(updated_ideo.body_md, "知者行之始，行者知之成");
 
@@ -337,8 +421,18 @@ fn test_trait_and_ideology_and_spirit_crud_and_delete_life() {
     assert_eq!(ideos_after.len(), 0);
 
     // 3. NationalSpirit update & delete
-    let spirit = Repository::create_national_spirit(&conn, &life.id, "资本寒冬", "阶段性紧缩", None).unwrap();
-    let updated_spirit = Repository::update_national_spirit(&conn, &life.id, &spirit.id, "行业技术变革潮", "AI大模型全面重塑工作流", None).unwrap();
+    let spirit =
+        Repository::create_national_spirit(&conn, &life.id, "资本寒冬", "阶段性紧缩", None)
+            .unwrap();
+    let updated_spirit = Repository::update_national_spirit(
+        &conn,
+        &life.id,
+        &spirit.id,
+        "行业技术变革潮",
+        "AI大模型全面重塑工作流",
+        None,
+    )
+    .unwrap();
     assert_eq!(updated_spirit.title, "行业技术变革潮");
 
     Repository::delete_national_spirit(&conn, &life.id, &spirit.id).unwrap();
@@ -381,7 +475,8 @@ fn test_active_equipped_traits_and_stage_mutual_exclusion() {
     Repository::add_trait_relation(&conn, &life.id, &d1.id, &d2.id, None).unwrap();
 
     // 3. 创建独立特质
-    let standalone = Repository::create_trait(&conn, &life.id, "坚毅不拔", "独立心理特征", None).unwrap();
+    let standalone =
+        Repository::create_trait(&conn, &life.id, "坚毅不拔", "独立心理特征", None).unwrap();
 
     // 总特质共有 5 + 2 + 1 = 8 项
     let all_traits = Repository::get_traits(&conn, &life.id, false).unwrap();
@@ -389,35 +484,74 @@ fn test_active_equipped_traits_and_stage_mutual_exclusion() {
 
     // 4. 验证未指定活跃阶梯时的初始容灾：
     // 每条演化谱系严格只产出 1 项代表阶梯，决不允许全部 8 项并列上阵！
-    let overview1 = Repository::get_world_overview(&conn, &life.id).unwrap().unwrap();
-    assert_eq!(overview1.traits.len(), 3, "8项特质中应只有3项活跃上阵（四角洲1项、三角洲1项、独立特质1项）");
-    assert!(overview1.traits.iter().any(|t| t.title.starts_with("四角洲能力")));
-    assert!(overview1.traits.iter().any(|t| t.title.starts_with("三角洲能力")));
+    let overview1 = Repository::get_world_overview(&conn, &life.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        overview1.traits.len(),
+        3,
+        "8项特质中应只有3项活跃上阵（四角洲1项、三角洲1项、独立特质1项）"
+    );
+    assert!(overview1
+        .traits
+        .iter()
+        .any(|t| t.title.starts_with("四角洲能力")));
+    assert!(overview1
+        .traits
+        .iter()
+        .any(|t| t.title.starts_with("三角洲能力")));
     assert!(overview1.traits.iter().any(|t| t.id == standalone.id));
 
     // 5. 标定四角洲能力所处阶段为第3阶 (s3)
-    let s_group = vec![s1.id.clone(), s2.id.clone(), s3.id.clone(), s4.id.clone(), s5.id.clone()];
+    let s_group = vec![
+        s1.id.clone(),
+        s2.id.clone(),
+        s3.id.clone(),
+        s4.id.clone(),
+        s5.id.clone(),
+    ];
     Repository::set_active_trait_stage(&mut conn, &life.id, &s_group, &s3.id).unwrap();
 
-    let overview2 = Repository::get_world_overview(&conn, &life.id).unwrap().unwrap();
+    let overview2 = Repository::get_world_overview(&conn, &life.id)
+        .unwrap()
+        .unwrap();
     assert_eq!(overview2.traits.len(), 3);
-    let active_s = overview2.traits.iter().find(|t| t.title.starts_with("四角洲能力")).unwrap();
+    let active_s = overview2
+        .traits
+        .iter()
+        .find(|t| t.title.starts_with("四角洲能力"))
+        .unwrap();
     assert_eq!(active_s.id, s3.id, "活跃的必须是标定的第3阶");
     assert_eq!(active_s.title, "四角洲能力 等级3");
 
     // 6. 将四角洲能力整条谱系设为【待命】(下阵)
     Repository::set_trait_equipped(&mut conn, &life.id, &s_group, false, None).unwrap();
 
-    let overview3 = Repository::get_world_overview(&conn, &life.id).unwrap().unwrap();
-    assert_eq!(overview3.traits.len(), 2, "四角洲待命下阵后，活跃心智特质应只剩三角洲与独立特质共2项");
-    assert!(!overview3.traits.iter().any(|t| t.title.starts_with("四角洲能力")));
+    let overview3 = Repository::get_world_overview(&conn, &life.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        overview3.traits.len(),
+        2,
+        "四角洲待命下阵后，活跃心智特质应只剩三角洲与独立特质共2项"
+    );
+    assert!(!overview3
+        .traits
+        .iter()
+        .any(|t| t.title.starts_with("四角洲能力")));
 
     // 7. 将四角洲能力重新【上阵激活】，并指定激活第4阶 (s4)
     Repository::set_trait_equipped(&mut conn, &life.id, &s_group, true, Some(&s4.id)).unwrap();
 
-    let overview4 = Repository::get_world_overview(&conn, &life.id).unwrap().unwrap();
+    let overview4 = Repository::get_world_overview(&conn, &life.id)
+        .unwrap()
+        .unwrap();
     assert_eq!(overview4.traits.len(), 3);
-    let active_s4 = overview4.traits.iter().find(|t| t.title.starts_with("四角洲能力")).unwrap();
+    let active_s4 = overview4
+        .traits
+        .iter()
+        .find(|t| t.title.starts_with("四角洲能力"))
+        .unwrap();
     assert_eq!(active_s4.id, s4.id, "重新上阵后激活的应是指定的第4阶");
 }
 
@@ -430,30 +564,58 @@ fn test_cross_life_isolation_and_dag_cycle_prevention() {
     let life_b = Repository::create_life(&mut conn, "世界B").unwrap();
 
     // 1. 创建国策
-    let fa1 = Repository::create_focus(&mut conn, &life_a.id, "A1", "", None, None, "active", 0.0, 0.0).unwrap();
-    let fa2 = Repository::create_focus(&mut conn, &life_a.id, "A2", "", None, None, "active", 0.0, 0.0).unwrap();
-    let fa3 = Repository::create_focus(&mut conn, &life_a.id, "A3", "", None, None, "active", 0.0, 0.0).unwrap();
-    let fb1 = Repository::create_focus(&mut conn, &life_b.id, "B1", "", None, None, "active", 0.0, 0.0).unwrap();
+    let fa1 = Repository::create_focus(
+        &mut conn, &life_a.id, "A1", "", None, None, "active", 0.0, 0.0,
+    )
+    .unwrap();
+    let fa2 = Repository::create_focus(
+        &mut conn, &life_a.id, "A2", "", None, None, "active", 0.0, 0.0,
+    )
+    .unwrap();
+    let fa3 = Repository::create_focus(
+        &mut conn, &life_a.id, "A3", "", None, None, "active", 0.0, 0.0,
+    )
+    .unwrap();
+    let fb1 = Repository::create_focus(
+        &mut conn, &life_b.id, "B1", "", None, None, "active", 0.0, 0.0,
+    )
+    .unwrap();
 
     // 跨人生空间关系拦截验证
-    let cross_res = Repository::add_focus_relation(&conn, &life_a.id, &fa1.id, &fb1.id, "prerequisite", None);
-    assert!(cross_res.is_err(), "跨人生空间创建国策关联必须被彻底阻断拒绝");
+    let cross_res =
+        Repository::add_focus_relation(&conn, &life_a.id, &fa1.id, &fb1.id, "prerequisite", None);
+    assert!(
+        cross_res.is_err(),
+        "跨人生空间创建国策关联必须被彻底阻断拒绝"
+    );
 
     // 自连接拦截验证
-    let self_res = Repository::add_focus_relation(&conn, &life_a.id, &fa1.id, &fa1.id, "prerequisite", None);
+    let self_res =
+        Repository::add_focus_relation(&conn, &life_a.id, &fa1.id, &fa1.id, "prerequisite", None);
     assert!(self_res.is_err(), "国策关联不能连接自身");
 
     // 正常添加 A1 -> A2
-    Repository::add_focus_relation(&conn, &life_a.id, &fa1.id, &fa2.id, "prerequisite", None).unwrap();
+    Repository::add_focus_relation(&conn, &life_a.id, &fa1.id, &fa2.id, "prerequisite", None)
+        .unwrap();
     // 正常添加 A2 -> A3
-    Repository::add_focus_relation(&conn, &life_a.id, &fa2.id, &fa3.id, "prerequisite", None).unwrap();
+    Repository::add_focus_relation(&conn, &life_a.id, &fa2.id, &fa3.id, "prerequisite", None)
+        .unwrap();
 
     // 环路检测：尝试添加 A3 -> A1，构成 A1 -> A2 -> A3 -> A1 环路，必须拦截！
-    let cycle_res = Repository::add_focus_relation(&conn, &life_a.id, &fa3.id, &fa1.id, "prerequisite", None);
+    let cycle_res =
+        Repository::add_focus_relation(&conn, &life_a.id, &fa3.id, &fa1.id, "prerequisite", None);
     assert!(cycle_res.is_err(), "国策前置环路必须被 DAG 检测拒绝！");
 
     // 互斥关系正规化验证 (min, max)
-    let mx1 = Repository::add_focus_relation(&conn, &life_a.id, &fa2.id, &fa1.id, "mutually_exclusive", None).unwrap();
+    let mx1 = Repository::add_focus_relation(
+        &conn,
+        &life_a.id,
+        &fa2.id,
+        &fa1.id,
+        "mutually_exclusive",
+        None,
+    )
+    .unwrap();
     let expected_src = if fa1.id < fa2.id { &fa1.id } else { &fa2.id };
     let expected_tgt = if fa1.id < fa2.id { &fa2.id } else { &fa1.id };
     assert_eq!(&mx1.source_focus_id, expected_src);
@@ -554,7 +716,14 @@ fn test_trait_icon_preserved_on_equip_changes() {
 
     let life = Repository::create_life(&mut conn, "图标保留测试空间").unwrap();
     let custom_icon = "hoi4-style-shield.svg";
-    let t = Repository::create_trait(&conn, &life.id, "装甲先锋", "装甲战术专家", Some(custom_icon)).unwrap();
+    let t = Repository::create_trait(
+        &conn,
+        &life.id,
+        "装甲先锋",
+        "装甲战术专家",
+        Some(custom_icon),
+    )
+    .unwrap();
     assert_eq!(t.icon.as_deref(), Some(custom_icon));
     assert_eq!(t.equip_state.as_deref(), Some("unequipped"));
 
@@ -563,19 +732,31 @@ fn test_trait_icon_preserved_on_equip_changes() {
     Repository::set_active_trait_stage(&mut conn, &life.id, &group, &t.id).unwrap();
     let fetched1 = Repository::get_traits(&conn, &life.id, false).unwrap();
     assert_eq!(fetched1[0].equip_state.as_deref(), Some("active"));
-    assert_eq!(fetched1[0].icon.as_deref(), Some(custom_icon), "切换为 active 必须保留用户配置的 icon");
+    assert_eq!(
+        fetched1[0].icon.as_deref(),
+        Some(custom_icon),
+        "切换为 active 必须保留用户配置的 icon"
+    );
 
     // 2. 待命下阵：equip_state -> benched, icon 必须完好无损保留！
     Repository::set_trait_equipped(&mut conn, &life.id, &group, false, None).unwrap();
     let fetched2 = Repository::get_traits(&conn, &life.id, false).unwrap();
     assert_eq!(fetched2[0].equip_state.as_deref(), Some("benched"));
-    assert_eq!(fetched2[0].icon.as_deref(), Some(custom_icon), "待命下阵后必须保留用户配置的 icon");
+    assert_eq!(
+        fetched2[0].icon.as_deref(),
+        Some(custom_icon),
+        "待命下阵后必须保留用户配置的 icon"
+    );
 
     // 3. 重新上阵：equip_state -> active, icon 必须完好无损保留！
     Repository::set_trait_equipped(&mut conn, &life.id, &group, true, Some(&t.id)).unwrap();
     let fetched3 = Repository::get_traits(&conn, &life.id, false).unwrap();
     assert_eq!(fetched3[0].equip_state.as_deref(), Some("active"));
-    assert_eq!(fetched3[0].icon.as_deref(), Some(custom_icon), "重新上阵后必须保留用户配置的 icon");
+    assert_eq!(
+        fetched3[0].icon.as_deref(),
+        Some(custom_icon),
+        "重新上阵后必须保留用户配置的 icon"
+    );
 }
 
 #[test]
@@ -600,11 +781,14 @@ fn test_cross_life_sub_focus_and_snapshot_rejection() {
     .unwrap();
 
     // 在世界A中试图为世界B的国策创建子事项 -> 必须拒绝
-    let cross_sub_res = Repository::create_sub_focus(&conn, &life_a.id, &focus_b.id, "非法跨界子项", None);
+    let cross_sub_res =
+        Repository::create_sub_focus(&conn, &life_a.id, &focus_b.id, "非法跨界子项", None);
     assert!(cross_sub_res.is_err(), "严禁跨人生世界创建子事项");
 
     // 在世界B创建世界快照
-    let snap_b = Repository::create_world_snapshot(&conn, &life_b.id, "快照B", Some("世界B的快照"), "{}").unwrap();
+    let snap_b =
+        Repository::create_world_snapshot(&conn, &life_b.id, "快照B", Some("世界B的快照"), "{}")
+            .unwrap();
 
     // 在世界A中试图关联世界B的快照创建大事记 -> 必须拒绝
     let cross_event_res = Repository::create_event(
@@ -654,7 +838,10 @@ fn test_invalid_enum_validation_and_affected_row_checks() {
         None,
         None,
     );
-    assert!(invalid_event_res.is_err(), "未定义大事记类型必须在入库前拒绝");
+    assert!(
+        invalid_event_res.is_err(),
+        "未定义大事记类型必须在入库前拒绝"
+    );
 
     // 3. 正常创建并测试无效子事项状态与影响行
     let valid_focus = Repository::create_focus(
@@ -670,12 +857,22 @@ fn test_invalid_enum_validation_and_affected_row_checks() {
     )
     .unwrap();
 
-    let sub = Repository::create_sub_focus(&conn, &life.id, &valid_focus.id, "正常子项", None).unwrap();
-    let invalid_sub_res = Repository::update_sub_focus_status(&conn, &life.id, &sub.id, "illegal_sub_status");
+    let sub =
+        Repository::create_sub_focus(&conn, &life.id, &valid_focus.id, "正常子项", None).unwrap();
+    let invalid_sub_res =
+        Repository::update_sub_focus_status(&conn, &life.id, &sub.id, "illegal_sub_status");
     assert!(invalid_sub_res.is_err(), "未定义子项状态必须在入库前拒绝");
 
     // 4. 更新/删除不存在的实体影响行检验 (必须报错 QueryReturnedNoRows，不应静默通过)
-    let non_existent_focus_update = Repository::update_focus_status(&mut conn, &life.id, "ghost-id", "completed", None, None, None);
+    let non_existent_focus_update = Repository::update_focus_status(
+        &mut conn,
+        &life.id,
+        "ghost-id",
+        "completed",
+        None,
+        None,
+        None,
+    );
     assert!(non_existent_focus_update.is_err());
 
     let non_existent_trait_delete = Repository::delete_trait(&mut conn, &life.id, "ghost-trait-id");
@@ -684,6 +881,3 @@ fn test_invalid_enum_validation_and_affected_row_checks() {
     let non_existent_sub_delete = Repository::delete_sub_focus(&conn, &life.id, "ghost-sub-id");
     assert!(non_existent_sub_delete.is_err());
 }
-
-
-

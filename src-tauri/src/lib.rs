@@ -1,8 +1,8 @@
+pub mod commands;
 pub mod db;
+pub mod llm;
 pub mod models;
 pub mod repositories;
-pub mod commands;
-pub mod llm;
 
 use db::DbState;
 use repositories::Repository;
@@ -27,10 +27,12 @@ pub fn run() {
             // 2. exe 同级存在 portable.flag 文件或 data 目录
             // 3. 默认系统应用数据目录 (%LOCALAPPDATA%/...)
             let is_portable_flag = std::env::args().any(|a| a == "--portable");
-            let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf()));
-            let has_local_marker = exe_dir.as_ref().is_some_and(|d| {
-                d.join("portable.flag").exists() || d.join("data").is_dir()
-            });
+            let exe_dir = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.to_path_buf()));
+            let has_local_marker = exe_dir
+                .as_ref()
+                .is_some_and(|d| d.join("portable.flag").exists() || d.join("data").is_dir());
 
             let app_data_dir = if is_portable_flag || has_local_marker {
                 let base = exe_dir.unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
@@ -47,7 +49,8 @@ pub fn run() {
             log::info!("Database and storage directory: {:?}", app_data_dir);
 
             // 初始化 SQLite 数据库与迁移引擎
-            let db_state = DbState::new(&app_data_dir).expect("failed to initialize sqlite database");
+            let db_state =
+                DbState::new(&app_data_dir).expect("failed to initialize sqlite database");
 
             // 首次启动若无 Life，默认创建一个，实现约定 §3.1
             {
@@ -55,7 +58,8 @@ pub fn run() {
                 let lives = Repository::list_lives(&conn).expect("failed to check existing lives");
                 if lives.is_empty() {
                     log::info!("No life found, creating initial default life: 第一人生");
-                    Repository::create_life(&mut conn, "第一人生").expect("failed to create default life");
+                    Repository::create_life(&mut conn, "第一人生")
+                        .expect("failed to create default life");
                 }
             }
 

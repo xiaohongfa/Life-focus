@@ -169,7 +169,7 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'create_life') {
-    const lifeId = `life-${Date.now()}`;
+    const lifeId = `life-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const name = (args?.name as string) || '新人生';
     const newLife: Life = {
       id: lifeId,
@@ -232,12 +232,12 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
 
   if (cmd === 'delete_life') {
     const lifeId = args?.lifeId as string;
-    const lifeIdx = mockData.lives.findIndex((l) => l.id === lifeId);
-    if (lifeIdx === -1) {
+    const exists = mockData.lives.some((l) => l.id === lifeId);
+    if (!exists) {
       throw new Error('人生世界不存在');
     }
     // 级联清理所有归属于该 lifeId 的数据
-    mockData.lives.splice(lifeIdx, 1);
+    mockData.lives = mockData.lives.filter((l) => l.id !== lifeId);
     mockData.foci = mockData.foci.filter((f) => f.life_id !== lifeId);
     mockData.relations = mockData.relations.filter((r) => r.life_id !== lifeId);
     mockData.focusHistory = mockData.focusHistory.filter((h) => h.life_id !== lifeId);

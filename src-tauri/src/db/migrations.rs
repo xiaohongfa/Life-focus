@@ -95,7 +95,11 @@ pub fn run_migrations(conn: &mut Connection) -> Result<()> {
                 return Err(custom_err(err_msg));
             }
         } else {
-            log::info!("Applying migration {} (v{})", migration.name, migration.version);
+            log::info!(
+                "Applying migration {} (v{})",
+                migration.name,
+                migration.version
+            );
             let tx = conn.transaction()?;
             tx.execute_batch(migration.sql)?;
             tx.execute(

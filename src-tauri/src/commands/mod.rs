@@ -1,7 +1,7 @@
-use tauri::State;
 use crate::db::DbState;
 use crate::models::*;
 use crate::repositories::Repository;
+use tauri::State;
 
 // Helper to map rusqlite errors to String
 fn map_err<E: std::fmt::Display>(e: E) -> String {
@@ -28,7 +28,10 @@ pub fn rename_life(state: State<'_, DbState>, life_id: String, name: String) -> 
 }
 
 #[tauri::command]
-pub fn get_world_overview(state: State<'_, DbState>, life_id: String) -> Result<Option<WorldOverview>, String> {
+pub fn get_world_overview(
+    state: State<'_, DbState>,
+    life_id: String,
+) -> Result<Option<WorldOverview>, String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::get_world_overview(&conn, &life_id).map_err(map_err)
 }
@@ -79,7 +82,10 @@ pub fn get_foci(state: State<'_, DbState>, life_id: String) -> Result<Vec<Focus>
 }
 
 #[tauri::command]
-pub fn get_focus_relations(state: State<'_, DbState>, life_id: String) -> Result<Vec<FocusRelation>, String> {
+pub fn get_focus_relations(
+    state: State<'_, DbState>,
+    life_id: String,
+) -> Result<Vec<FocusRelation>, String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::get_focus_relations(&conn, &life_id).map_err(map_err)
 }
@@ -144,7 +150,8 @@ pub fn update_focus_position(
     position_y: f64,
 ) -> Result<(), String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::update_focus_position(&conn, &life_id, &focus_id, position_x, position_y).map_err(map_err)
+    Repository::update_focus_position(&conn, &life_id, &focus_id, position_x, position_y)
+        .map_err(map_err)
 }
 
 #[tauri::command]
@@ -171,7 +178,11 @@ pub fn update_focus_content(
 }
 
 #[tauri::command]
-pub fn delete_focus(state: State<'_, DbState>, life_id: String, focus_id: String) -> Result<(), String> {
+pub fn delete_focus(
+    state: State<'_, DbState>,
+    life_id: String,
+    focus_id: String,
+) -> Result<(), String> {
     let mut conn = state.conn.lock().map_err(map_err)?;
     Repository::delete_focus(&mut conn, &life_id, &focus_id).map_err(map_err)
 }
@@ -186,12 +197,23 @@ pub fn add_focus_relation(
     note: Option<String>,
 ) -> Result<FocusRelation, String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::add_focus_relation(&conn, &life_id, &source_id, &target_id, &relation_type, note.as_deref())
-        .map_err(map_err)
+    Repository::add_focus_relation(
+        &conn,
+        &life_id,
+        &source_id,
+        &target_id,
+        &relation_type,
+        note.as_deref(),
+    )
+    .map_err(map_err)
 }
 
 #[tauri::command]
-pub fn delete_focus_relation(state: State<'_, DbState>, life_id: String, relation_id: String) -> Result<(), String> {
+pub fn delete_focus_relation(
+    state: State<'_, DbState>,
+    life_id: String,
+    relation_id: String,
+) -> Result<(), String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::delete_focus_relation(&conn, &life_id, &relation_id).map_err(map_err)
 }
@@ -222,35 +244,60 @@ pub fn update_leader(
     portrait_attachment_id: Option<String>,
 ) -> Result<(), String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::update_leader(&conn, &life_id, &name, &body_md, portrait_attachment_id.as_deref()).map_err(map_err)
+    Repository::update_leader(
+        &conn,
+        &life_id,
+        &name,
+        &body_md,
+        portrait_attachment_id.as_deref(),
+    )
+    .map_err(map_err)
 }
 
 #[tauri::command]
-pub fn get_situation(state: State<'_, DbState>, life_id: String) -> Result<Option<Situation>, String> {
+pub fn get_situation(
+    state: State<'_, DbState>,
+    life_id: String,
+) -> Result<Option<Situation>, String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::get_situation(&conn, &life_id).map_err(map_err)
 }
 
 #[tauri::command]
-pub fn update_situation(state: State<'_, DbState>, life_id: String, body_md: String) -> Result<(), String> {
+pub fn update_situation(
+    state: State<'_, DbState>,
+    life_id: String,
+    body_md: String,
+) -> Result<(), String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::update_situation(&conn, &life_id, &body_md).map_err(map_err)
 }
 
 #[tauri::command]
-pub fn get_philosophy(state: State<'_, DbState>, life_id: String) -> Result<Option<Philosophy>, String> {
+pub fn get_philosophy(
+    state: State<'_, DbState>,
+    life_id: String,
+) -> Result<Option<Philosophy>, String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::get_philosophy(&conn, &life_id).map_err(map_err)
 }
 
 #[tauri::command]
-pub fn update_philosophy(state: State<'_, DbState>, life_id: String, body_md: String) -> Result<(), String> {
+pub fn update_philosophy(
+    state: State<'_, DbState>,
+    life_id: String,
+    body_md: String,
+) -> Result<(), String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::update_philosophy(&conn, &life_id, &body_md).map_err(map_err)
 }
 
 #[tauri::command]
-pub fn get_traits(state: State<'_, DbState>, life_id: String, include_archived: bool) -> Result<Vec<Trait>, String> {
+pub fn get_traits(
+    state: State<'_, DbState>,
+    life_id: String,
+    include_archived: bool,
+) -> Result<Vec<Trait>, String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::get_traits(&conn, &life_id, include_archived).map_err(map_err)
 }
@@ -268,19 +315,31 @@ pub fn create_trait(
 }
 
 #[tauri::command]
-pub fn archive_trait(state: State<'_, DbState>, life_id: String, trait_id: String, archive: bool) -> Result<(), String> {
+pub fn archive_trait(
+    state: State<'_, DbState>,
+    life_id: String,
+    trait_id: String,
+    archive: bool,
+) -> Result<(), String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::archive_trait(&conn, &life_id, &trait_id, archive).map_err(map_err)
 }
 
 #[tauri::command]
-pub fn delete_trait(state: State<'_, DbState>, life_id: String, trait_id: String) -> Result<(), String> {
+pub fn delete_trait(
+    state: State<'_, DbState>,
+    life_id: String,
+    trait_id: String,
+) -> Result<(), String> {
     let mut conn = state.conn.lock().map_err(map_err)?;
     Repository::delete_trait(&mut conn, &life_id, &trait_id).map_err(map_err)
 }
 
 #[tauri::command]
-pub fn get_trait_relations(state: State<'_, DbState>, life_id: String) -> Result<Vec<TraitRelation>, String> {
+pub fn get_trait_relations(
+    state: State<'_, DbState>,
+    life_id: String,
+) -> Result<Vec<TraitRelation>, String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::get_trait_relations(&conn, &life_id).map_err(map_err)
 }
@@ -294,7 +353,14 @@ pub fn add_trait_relation(
     note: Option<String>,
 ) -> Result<TraitRelation, String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::add_trait_relation(&conn, &life_id, &predecessor_id, &successor_id, note.as_deref()).map_err(map_err)
+    Repository::add_trait_relation(
+        &conn,
+        &life_id,
+        &predecessor_id,
+        &successor_id,
+        note.as_deref(),
+    )
+    .map_err(map_err)
 }
 
 #[tauri::command]
@@ -308,7 +374,11 @@ pub fn delete_trait_relation(
 }
 
 #[tauri::command]
-pub fn get_ideologies(state: State<'_, DbState>, life_id: String, include_archived: bool) -> Result<Vec<Ideology>, String> {
+pub fn get_ideologies(
+    state: State<'_, DbState>,
+    life_id: String,
+    include_archived: bool,
+) -> Result<Vec<Ideology>, String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::get_ideologies(&conn, &life_id, include_archived).map_err(map_err)
 }
@@ -326,13 +396,22 @@ pub fn create_ideology(
 }
 
 #[tauri::command]
-pub fn archive_ideology(state: State<'_, DbState>, life_id: String, ideology_id: String, archive: bool) -> Result<(), String> {
+pub fn archive_ideology(
+    state: State<'_, DbState>,
+    life_id: String,
+    ideology_id: String,
+    archive: bool,
+) -> Result<(), String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::archive_ideology(&conn, &life_id, &ideology_id, archive).map_err(map_err)
 }
 
 #[tauri::command]
-pub fn get_national_spirits(state: State<'_, DbState>, life_id: String, include_archived: bool) -> Result<Vec<NationalSpirit>, String> {
+pub fn get_national_spirits(
+    state: State<'_, DbState>,
+    life_id: String,
+    include_archived: bool,
+) -> Result<Vec<NationalSpirit>, String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::get_national_spirits(&conn, &life_id, include_archived).map_err(map_err)
 }
@@ -346,11 +425,17 @@ pub fn create_national_spirit(
     icon: Option<String>,
 ) -> Result<NationalSpirit, String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::create_national_spirit(&conn, &life_id, &title, &body_md, icon.as_deref()).map_err(map_err)
+    Repository::create_national_spirit(&conn, &life_id, &title, &body_md, icon.as_deref())
+        .map_err(map_err)
 }
 
 #[tauri::command]
-pub fn archive_national_spirit(state: State<'_, DbState>, life_id: String, spirit_id: String, archive: bool) -> Result<(), String> {
+pub fn archive_national_spirit(
+    state: State<'_, DbState>,
+    life_id: String,
+    spirit_id: String,
+    archive: bool,
+) -> Result<(), String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::archive_national_spirit(&conn, &life_id, &spirit_id, archive).map_err(map_err)
 }
@@ -419,11 +504,7 @@ pub fn update_essay(
 }
 
 #[tauri::command]
-pub fn delete_essay(
-    state: State<'_, DbState>,
-    life_id: String,
-    id: String,
-) -> Result<(), String> {
+pub fn delete_essay(state: State<'_, DbState>, life_id: String, id: String) -> Result<(), String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::delete_essay(&conn, &life_id, &id).map_err(map_err)
 }
@@ -449,11 +530,21 @@ pub fn create_world_snapshot(
     payload_json: String,
 ) -> Result<WorldSnapshot, String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::create_world_snapshot(&conn, &life_id, &name, description.as_deref(), &payload_json).map_err(map_err)
+    Repository::create_world_snapshot(
+        &conn,
+        &life_id,
+        &name,
+        description.as_deref(),
+        &payload_json,
+    )
+    .map_err(map_err)
 }
 
 #[tauri::command]
-pub fn list_world_snapshots(state: State<'_, DbState>, life_id: String) -> Result<Vec<WorldSnapshot>, String> {
+pub fn list_world_snapshots(
+    state: State<'_, DbState>,
+    life_id: String,
+) -> Result<Vec<WorldSnapshot>, String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::list_world_snapshots(&conn, &life_id).map_err(map_err)
 }
@@ -497,7 +588,8 @@ pub fn create_sub_focus(
     body_md: Option<String>,
 ) -> Result<FocusSubItem, String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::create_sub_focus(&conn, &life_id, &focus_id, &title, body_md.as_deref()).map_err(map_err)
+    Repository::create_sub_focus(&conn, &life_id, &focus_id, &title, body_md.as_deref())
+        .map_err(map_err)
 }
 
 #[tauri::command]
@@ -541,7 +633,8 @@ pub fn create_staff_member(
     model: Option<String>,
 ) -> Result<StaffMember, String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::create_staff_member(&conn, &life_id, &name, &role, &prompt, model.as_deref()).map_err(map_err)
+    Repository::create_staff_member(&conn, &life_id, &name, &role, &prompt, model.as_deref())
+        .map_err(map_err)
 }
 
 #[tauri::command]
@@ -555,7 +648,8 @@ pub fn update_staff_member(
     enabled: bool,
 ) -> Result<(), String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::update_staff_member(&conn, &life_id, &member_id, &name, &role, &prompt, enabled).map_err(map_err)
+    Repository::update_staff_member(&conn, &life_id, &member_id, &name, &role, &prompt, enabled)
+        .map_err(map_err)
 }
 
 #[tauri::command]
@@ -588,34 +682,34 @@ pub fn create_staff_meeting(
     messages: Vec<(String, i32, String)>,
 ) -> Result<StaffMeeting, String> {
     let mut conn = state.conn.lock().map_err(map_err)?;
-    Repository::create_staff_meeting(&mut conn, &life_id, &topic, &confirmed_minutes_md, &context_module_names, rounds, messages).map_err(map_err)
+    Repository::create_staff_meeting(
+        &mut conn,
+        &life_id,
+        &topic,
+        &confirmed_minutes_md,
+        &context_module_names,
+        rounds,
+        messages,
+    )
+    .map_err(map_err)
 }
 
 // ==================== EXPORT DATA COMMANDS (§16) ====================
 #[tauri::command]
-pub fn export_life_markdown(
-    state: State<'_, DbState>,
-    life_id: String,
-) -> Result<String, String> {
+pub fn export_life_markdown(state: State<'_, DbState>, life_id: String) -> Result<String, String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::export_life_markdown(&conn, &life_id).map_err(map_err)
 }
 
 #[tauri::command]
-pub fn export_life_json(
-    state: State<'_, DbState>,
-    life_id: String,
-) -> Result<String, String> {
+pub fn export_life_json(state: State<'_, DbState>, life_id: String) -> Result<String, String> {
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::export_life_json(&conn, &life_id).map_err(map_err)
 }
 
 // ==================== DELETE LIFE & CRUD COMMANDS ====================
 #[tauri::command]
-pub fn delete_life(
-    state: State<'_, DbState>,
-    life_id: String,
-) -> Result<(), String> {
+pub fn delete_life(state: State<'_, DbState>, life_id: String) -> Result<(), String> {
     let mut conn = state.conn.lock().map_err(map_err)?;
     Repository::delete_life(&mut conn, &life_id).map_err(map_err)
 }
@@ -630,7 +724,8 @@ pub fn update_trait(
     icon: Option<String>,
 ) -> Result<Trait, String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::update_trait(&conn, &life_id, &id, &title, &body_md, icon.as_deref()).map_err(map_err)
+    Repository::update_trait(&conn, &life_id, &id, &title, &body_md, icon.as_deref())
+        .map_err(map_err)
 }
 
 #[tauri::command]
@@ -641,7 +736,8 @@ pub fn set_active_trait_stage(
     active_trait_id: String,
 ) -> Result<(), String> {
     let mut conn = state.conn.lock().map_err(map_err)?;
-    Repository::set_active_trait_stage(&mut conn, &life_id, &group_trait_ids, &active_trait_id).map_err(map_err)
+    Repository::set_active_trait_stage(&mut conn, &life_id, &group_trait_ids, &active_trait_id)
+        .map_err(map_err)
 }
 
 #[tauri::command]
@@ -653,7 +749,14 @@ pub fn set_trait_equipped(
     target_active_id: Option<String>,
 ) -> Result<(), String> {
     let mut conn = state.conn.lock().map_err(map_err)?;
-    Repository::set_trait_equipped(&mut conn, &life_id, &trait_ids, equip, target_active_id.as_deref()).map_err(map_err)
+    Repository::set_trait_equipped(
+        &mut conn,
+        &life_id,
+        &trait_ids,
+        equip,
+        target_active_id.as_deref(),
+    )
+    .map_err(map_err)
 }
 
 #[tauri::command]
@@ -666,7 +769,8 @@ pub fn update_ideology(
     icon: Option<String>,
 ) -> Result<Ideology, String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::update_ideology(&conn, &life_id, &id, &title, &body_md, icon.as_deref()).map_err(map_err)
+    Repository::update_ideology(&conn, &life_id, &id, &title, &body_md, icon.as_deref())
+        .map_err(map_err)
 }
 
 #[tauri::command]
@@ -689,7 +793,8 @@ pub fn update_national_spirit(
     icon: Option<String>,
 ) -> Result<NationalSpirit, String> {
     let conn = state.conn.lock().map_err(map_err)?;
-    Repository::update_national_spirit(&conn, &life_id, &id, &title, &body_md, icon.as_deref()).map_err(map_err)
+    Repository::update_national_spirit(&conn, &life_id, &id, &title, &body_md, icon.as_deref())
+        .map_err(map_err)
 }
 
 #[tauri::command]
@@ -701,4 +806,3 @@ pub fn delete_national_spirit(
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::delete_national_spirit(&conn, &life_id, &id).map_err(map_err)
 }
-

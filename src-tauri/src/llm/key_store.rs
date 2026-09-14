@@ -61,7 +61,8 @@ pub struct KeyStore {
 }
 
 fn get_keyring_entry() -> Result<keyring::Entry, String> {
-    keyring::Entry::new(SERVICE_NAME, KEY_NAME).map_err(|e| format!("初始化系统凭证管理器失败: {e}"))
+    keyring::Entry::new(SERVICE_NAME, KEY_NAME)
+        .map_err(|e| format!("初始化系统凭证管理器失败: {e}"))
 }
 
 fn secure_read_key() -> Option<String> {

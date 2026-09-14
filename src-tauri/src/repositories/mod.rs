@@ -1,7 +1,7 @@
+use crate::models::*;
 use rusqlite::{params, Connection, Result};
 use std::str::FromStr;
 use uuid::Uuid;
-use crate::models::*;
 
 fn custom_err(msg: impl Into<String>) -> rusqlite::Error {
     rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(msg.into())))
@@ -12,7 +12,8 @@ pub struct Repository;
 impl Repository {
     // ==================== LIFE REPOSITORY ====================
     pub fn list_lives(conn: &Connection) -> Result<Vec<Life>> {
-        let mut stmt = conn.prepare("SELECT id, name, created_at, updated_at FROM life ORDER BY created_at ASC")?;
+        let mut stmt = conn
+            .prepare("SELECT id, name, created_at, updated_at FROM life ORDER BY created_at ASC")?;
         let rows = stmt.query_map([], |row| {
             Ok(Life {
                 id: row.get(0)?,
@@ -25,7 +26,8 @@ impl Repository {
     }
 
     pub fn get_life(conn: &Connection, life_id: &str) -> Result<Option<Life>> {
-        let mut stmt = conn.prepare("SELECT id, name, created_at, updated_at FROM life WHERE id = ?1")?;
+        let mut stmt =
+            conn.prepare("SELECT id, name, created_at, updated_at FROM life WHERE id = ?1")?;
         let mut rows = stmt.query_map([life_id], |row| {
             Ok(Life {
                 id: row.get(0)?,
@@ -111,7 +113,8 @@ impl Repository {
 
     // ==================== STABILITY REPOSITORY ====================
     pub fn get_stability(conn: &Connection, life_id: &str) -> Result<Stability> {
-        let mut stmt = conn.prepare("SELECT current_value, updated_at FROM stability WHERE life_id = ?1")?;
+        let mut stmt =
+            conn.prepare("SELECT current_value, updated_at FROM stability WHERE life_id = ?1")?;
         let mut rows = stmt.query_map([life_id], |row| {
             Ok(Stability {
                 life_id: life_id.to_string(),
@@ -180,7 +183,11 @@ impl Repository {
         })
     }
 
-    pub fn get_stability_history(conn: &Connection, life_id: &str, limit: i64) -> Result<Vec<StabilityChange>> {
+    pub fn get_stability_history(
+        conn: &Connection,
+        life_id: &str,
+        limit: i64,
+    ) -> Result<Vec<StabilityChange>> {
         let mut stmt = conn.prepare(
             "SELECT id, before_value, after_value, delta, occurred_at, recorded_at, reason, source_type, source_id
              FROM stability_change WHERE life_id = ?1 ORDER BY occurred_at DESC LIMIT ?2",
@@ -412,7 +419,8 @@ impl Repository {
         relation_type: &str,
         note: Option<&str>,
     ) -> Result<FocusRelation> {
-        let _parsed_rel: FocusRelationType = relation_type.parse().map_err(|e: String| custom_err(e))?;
+        let _parsed_rel: FocusRelationType =
+            relation_type.parse().map_err(|e: String| custom_err(e))?;
         if source_id == target_id {
             return Err(custom_err("Focus relation cannot connect a node to itself"));
         }
@@ -423,7 +431,9 @@ impl Repository {
             |row| row.get(0),
         )?;
         if !valid {
-            return Err(custom_err("Source and target focus nodes must belong to the specified life_id"));
+            return Err(custom_err(
+                "Source and target focus nodes must belong to the specified life_id",
+            ));
         }
 
         let (eff_source, eff_target) = if relation_type == "mutually_exclusive" {
@@ -452,7 +462,8 @@ impl Repository {
                     has_cycle = true;
                     break;
                 }
-                let next_nodes = stmt.query_map(params![life_id, curr], |r| r.get::<_, String>(0))?;
+                let next_nodes =
+                    stmt.query_map(params![life_id, curr], |r| r.get::<_, String>(0))?;
                 for next in next_nodes {
                     let n = next?;
                     if !visited.contains(&n) {
@@ -463,7 +474,9 @@ impl Repository {
             }
 
             if has_cycle {
-                return Err(custom_err("Cannot add prerequisite relation: would create a circular dependency cycle"));
+                return Err(custom_err(
+                    "Cannot add prerequisite relation: would create a circular dependency cycle",
+                ));
             }
         }
 
@@ -500,7 +513,11 @@ impl Repository {
         })
     }
 
-    pub fn delete_focus_relation(conn: &Connection, life_id: &str, relation_id: &str) -> Result<()> {
+    pub fn delete_focus_relation(
+        conn: &Connection,
+        life_id: &str,
+        relation_id: &str,
+    ) -> Result<()> {
         let affected = conn.execute(
             "DELETE FROM focus_relation WHERE id = ?1 AND life_id = ?2",
             params![relation_id, life_id],
@@ -511,7 +528,11 @@ impl Repository {
         Ok(())
     }
 
-    pub fn get_focus_history(conn: &Connection, life_id: &str, focus_id: Option<&str>) -> Result<Vec<FocusStatusHistory>> {
+    pub fn get_focus_history(
+        conn: &Connection,
+        life_id: &str,
+        focus_id: Option<&str>,
+    ) -> Result<Vec<FocusStatusHistory>> {
         if let Some(fid) = focus_id {
             let mut stmt = conn.prepare(
                 "SELECT id, focus_id, from_status, to_status, occurred_at, recorded_at, reason, source_type, source_id
@@ -596,7 +617,9 @@ impl Repository {
     }
 
     pub fn get_situation(conn: &Connection, life_id: &str) -> Result<Option<Situation>> {
-        let mut stmt = conn.prepare("SELECT id, body_md, created_at, updated_at FROM situation WHERE life_id = ?1")?;
+        let mut stmt = conn.prepare(
+            "SELECT id, body_md, created_at, updated_at FROM situation WHERE life_id = ?1",
+        )?;
         let mut rows = stmt.query_map([life_id], |row| {
             Ok(Situation {
                 id: row.get(0)?,
@@ -625,7 +648,9 @@ impl Repository {
     }
 
     pub fn get_philosophy(conn: &Connection, life_id: &str) -> Result<Option<Philosophy>> {
-        let mut stmt = conn.prepare("SELECT id, body_md, created_at, updated_at FROM philosophy WHERE life_id = ?1")?;
+        let mut stmt = conn.prepare(
+            "SELECT id, body_md, created_at, updated_at FROM philosophy WHERE life_id = ?1",
+        )?;
         let mut rows = stmt.query_map([life_id], |row| {
             Ok(Philosophy {
                 id: row.get(0)?,
@@ -653,7 +678,11 @@ impl Repository {
         Ok(())
     }
 
-    pub fn get_traits(conn: &Connection, life_id: &str, include_archived: bool) -> Result<Vec<Trait>> {
+    pub fn get_traits(
+        conn: &Connection,
+        life_id: &str,
+        include_archived: bool,
+    ) -> Result<Vec<Trait>> {
         let sql = if include_archived {
             "SELECT id, title, body_md, icon, archived_at, created_at, updated_at, equip_state FROM trait WHERE life_id = ?1 ORDER BY created_at ASC"
         } else {
@@ -676,7 +705,13 @@ impl Repository {
         rows.collect()
     }
 
-    pub fn create_trait(conn: &Connection, life_id: &str, title: &str, body_md: &str, icon: Option<&str>) -> Result<Trait> {
+    pub fn create_trait(
+        conn: &Connection,
+        life_id: &str,
+        title: &str,
+        body_md: &str,
+        icon: Option<&str>,
+    ) -> Result<Trait> {
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
@@ -697,7 +732,14 @@ impl Repository {
         })
     }
 
-    pub fn update_trait(conn: &Connection, life_id: &str, trait_id: &str, title: &str, body_md: &str, icon: Option<&str>) -> Result<Trait> {
+    pub fn update_trait(
+        conn: &Connection,
+        life_id: &str,
+        trait_id: &str,
+        title: &str,
+        body_md: &str,
+        icon: Option<&str>,
+    ) -> Result<Trait> {
         let now = chrono::Utc::now().to_rfc3339();
         let affected = conn.execute(
             "UPDATE trait SET title = ?1, body_md = ?2, icon = ?3, updated_at = ?4 WHERE id = ?5 AND life_id = ?6",
@@ -728,7 +770,12 @@ impl Repository {
         }
     }
 
-    pub fn set_active_trait_stage(conn: &mut Connection, life_id: &str, group_trait_ids: &[String], active_trait_id: &str) -> Result<()> {
+    pub fn set_active_trait_stage(
+        conn: &mut Connection,
+        life_id: &str,
+        group_trait_ids: &[String],
+        active_trait_id: &str,
+    ) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
         let tx = conn.transaction()?;
         for tid in group_trait_ids {
@@ -795,7 +842,10 @@ impl Repository {
         Ok(())
     }
 
-    pub fn resolve_active_equipped_traits(traits: &[Trait], relations: &[TraitRelation]) -> Vec<Trait> {
+    pub fn resolve_active_equipped_traits(
+        traits: &[Trait],
+        relations: &[TraitRelation],
+    ) -> Vec<Trait> {
         if traits.is_empty() {
             return Vec::new();
         }
@@ -804,8 +854,12 @@ impl Repository {
 
         let mut adj: HashMap<&str, Vec<&str>> = HashMap::new();
         for r in relations {
-            adj.entry(&r.predecessor_id).or_default().push(&r.successor_id);
-            adj.entry(&r.successor_id).or_default().push(&r.predecessor_id);
+            adj.entry(&r.predecessor_id)
+                .or_default()
+                .push(&r.successor_id);
+            adj.entry(&r.successor_id)
+                .or_default()
+                .push(&r.predecessor_id);
         }
 
         let trait_map: HashMap<&str, &Trait> = traits.iter().map(|t| (t.id.as_str(), t)).collect();
@@ -843,12 +897,8 @@ impl Repository {
                 continue;
             }
 
-            let is_benched = |t: &Trait| -> bool {
-                t.equip_state.as_deref() == Some("benched")
-            };
-            let is_active = |t: &Trait| -> bool {
-                t.equip_state.as_deref() == Some("active")
-            };
+            let is_benched = |t: &Trait| -> bool { t.equip_state.as_deref() == Some("benched") };
+            let is_active = |t: &Trait| -> bool { t.equip_state.as_deref() == Some("active") };
 
             if component_traits.len() == 1 {
                 let single = component_traits[0];
@@ -861,7 +911,8 @@ impl Repository {
                 } else {
                     let has_benched = component_traits.iter().any(|item| is_benched(item));
                     if !has_benched {
-                        let successors: HashSet<&str> = relations.iter().map(|r| r.successor_id.as_str()).collect();
+                        let successors: HashSet<&str> =
+                            relations.iter().map(|r| r.successor_id.as_str()).collect();
                         let root_trait = component_traits
                             .iter()
                             .find(|item| !successors.contains(item.id.as_str()))
@@ -876,8 +927,17 @@ impl Repository {
         active_traits
     }
 
-    pub fn archive_trait(conn: &Connection, life_id: &str, trait_id: &str, archive: bool) -> Result<()> {
-        let now = if archive { Some(chrono::Utc::now().to_rfc3339()) } else { None };
+    pub fn archive_trait(
+        conn: &Connection,
+        life_id: &str,
+        trait_id: &str,
+        archive: bool,
+    ) -> Result<()> {
+        let now = if archive {
+            Some(chrono::Utc::now().to_rfc3339())
+        } else {
+            None
+        };
         let affected = conn.execute(
             "UPDATE trait SET archived_at = ?1 WHERE id = ?2 AND life_id = ?3",
             params![now, trait_id, life_id],
@@ -930,7 +990,9 @@ impl Repository {
         note: Option<&str>,
     ) -> Result<TraitRelation> {
         if pred_id == succ_id {
-            return Err(custom_err("Trait relation cannot connect a trait to itself"));
+            return Err(custom_err(
+                "Trait relation cannot connect a trait to itself",
+            ));
         }
 
         let valid: bool = conn.query_row(
@@ -939,7 +1001,9 @@ impl Repository {
             |row| row.get(0),
         )?;
         if !valid {
-            return Err(custom_err("Predecessor and successor traits must belong to the specified life_id"));
+            return Err(custom_err(
+                "Predecessor and successor traits must belong to the specified life_id",
+            ));
         }
 
         // DAG cycle detection
@@ -969,7 +1033,9 @@ impl Repository {
         }
 
         if has_cycle {
-            return Err(custom_err("Cannot add trait relation: would create a circular dependency cycle"));
+            return Err(custom_err(
+                "Cannot add trait relation: would create a circular dependency cycle",
+            ));
         }
 
         let existing: Option<String> = conn.query_row(
@@ -1036,7 +1102,11 @@ impl Repository {
         Ok(())
     }
 
-    pub fn get_ideologies(conn: &Connection, life_id: &str, include_archived: bool) -> Result<Vec<Ideology>> {
+    pub fn get_ideologies(
+        conn: &Connection,
+        life_id: &str,
+        include_archived: bool,
+    ) -> Result<Vec<Ideology>> {
         let sql = if include_archived {
             "SELECT id, title, body_md, icon, sort_order, archived_at, created_at, updated_at FROM ideology WHERE life_id = ?1 ORDER BY sort_order ASC, created_at ASC"
         } else {
@@ -1059,7 +1129,13 @@ impl Repository {
         rows.collect()
     }
 
-    pub fn create_ideology(conn: &Connection, life_id: &str, title: &str, body_md: &str, icon: Option<&str>) -> Result<Ideology> {
+    pub fn create_ideology(
+        conn: &Connection,
+        life_id: &str,
+        title: &str,
+        body_md: &str,
+        icon: Option<&str>,
+    ) -> Result<Ideology> {
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
@@ -1080,8 +1156,17 @@ impl Repository {
         })
     }
 
-    pub fn archive_ideology(conn: &Connection, life_id: &str, ideology_id: &str, archive: bool) -> Result<()> {
-        let now = if archive { Some(chrono::Utc::now().to_rfc3339()) } else { None };
+    pub fn archive_ideology(
+        conn: &Connection,
+        life_id: &str,
+        ideology_id: &str,
+        archive: bool,
+    ) -> Result<()> {
+        let now = if archive {
+            Some(chrono::Utc::now().to_rfc3339())
+        } else {
+            None
+        };
         let affected = conn.execute(
             "UPDATE ideology SET archived_at = ?1 WHERE id = ?2 AND life_id = ?3",
             params![now, ideology_id, life_id],
@@ -1092,7 +1177,14 @@ impl Repository {
         Ok(())
     }
 
-    pub fn update_ideology(conn: &Connection, life_id: &str, ideology_id: &str, title: &str, body_md: &str, icon: Option<&str>) -> Result<Ideology> {
+    pub fn update_ideology(
+        conn: &Connection,
+        life_id: &str,
+        ideology_id: &str,
+        title: &str,
+        body_md: &str,
+        icon: Option<&str>,
+    ) -> Result<Ideology> {
         let now = chrono::Utc::now().to_rfc3339();
         let affected = conn.execute(
             "UPDATE ideology SET title = ?1, body_md = ?2, icon = ?3, updated_at = ?4 WHERE id = ?5 AND life_id = ?6",
@@ -1134,7 +1226,11 @@ impl Repository {
         Ok(())
     }
 
-    pub fn get_national_spirits(conn: &Connection, life_id: &str, include_archived: bool) -> Result<Vec<NationalSpirit>> {
+    pub fn get_national_spirits(
+        conn: &Connection,
+        life_id: &str,
+        include_archived: bool,
+    ) -> Result<Vec<NationalSpirit>> {
         let sql = if include_archived {
             "SELECT id, title, body_md, icon, archived_at, created_at, updated_at FROM national_spirit WHERE life_id = ?1 ORDER BY created_at ASC"
         } else {
@@ -1156,7 +1252,13 @@ impl Repository {
         rows.collect()
     }
 
-    pub fn create_national_spirit(conn: &Connection, life_id: &str, title: &str, body_md: &str, icon: Option<&str>) -> Result<NationalSpirit> {
+    pub fn create_national_spirit(
+        conn: &Connection,
+        life_id: &str,
+        title: &str,
+        body_md: &str,
+        icon: Option<&str>,
+    ) -> Result<NationalSpirit> {
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
@@ -1176,8 +1278,17 @@ impl Repository {
         })
     }
 
-    pub fn archive_national_spirit(conn: &Connection, life_id: &str, spirit_id: &str, archive: bool) -> Result<()> {
-        let now = if archive { Some(chrono::Utc::now().to_rfc3339()) } else { None };
+    pub fn archive_national_spirit(
+        conn: &Connection,
+        life_id: &str,
+        spirit_id: &str,
+        archive: bool,
+    ) -> Result<()> {
+        let now = if archive {
+            Some(chrono::Utc::now().to_rfc3339())
+        } else {
+            None
+        };
         let affected = conn.execute(
             "UPDATE national_spirit SET archived_at = ?1 WHERE id = ?2 AND life_id = ?3",
             params![now, spirit_id, life_id],
@@ -1188,7 +1299,14 @@ impl Repository {
         Ok(())
     }
 
-    pub fn update_national_spirit(conn: &Connection, life_id: &str, spirit_id: &str, title: &str, body_md: &str, icon: Option<&str>) -> Result<NationalSpirit> {
+    pub fn update_national_spirit(
+        conn: &Connection,
+        life_id: &str,
+        spirit_id: &str,
+        title: &str,
+        body_md: &str,
+        icon: Option<&str>,
+    ) -> Result<NationalSpirit> {
         let now = chrono::Utc::now().to_rfc3339();
         let affected = conn.execute(
             "UPDATE national_spirit SET title = ?1, body_md = ?2, icon = ?3, updated_at = ?4 WHERE id = ?5 AND life_id = ?6",
@@ -1320,7 +1438,12 @@ impl Repository {
         rows.collect()
     }
 
-    pub fn create_essay(conn: &Connection, life_id: &str, title: &str, body_md: &str) -> Result<Essay> {
+    pub fn create_essay(
+        conn: &Connection,
+        life_id: &str,
+        title: &str,
+        body_md: &str,
+    ) -> Result<Essay> {
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
@@ -1338,7 +1461,13 @@ impl Repository {
         })
     }
 
-    pub fn update_essay(conn: &Connection, life_id: &str, id: &str, title: &str, body_md: &str) -> Result<Essay> {
+    pub fn update_essay(
+        conn: &Connection,
+        life_id: &str,
+        id: &str,
+        title: &str,
+        body_md: &str,
+    ) -> Result<Essay> {
         let now = chrono::Utc::now().to_rfc3339();
         let affected = conn.execute(
             "UPDATE essay SET title = ?1, body_md = ?2, updated_at = ?3 WHERE id = ?4 AND life_id = ?5",
@@ -1364,7 +1493,10 @@ impl Repository {
     }
 
     pub fn delete_essay(conn: &Connection, life_id: &str, id: &str) -> Result<()> {
-        let affected = conn.execute("DELETE FROM essay WHERE id = ?1 AND life_id = ?2", params![id, life_id])?;
+        let affected = conn.execute(
+            "DELETE FROM essay WHERE id = ?1 AND life_id = ?2",
+            params![id, life_id],
+        )?;
         if affected == 0 {
             return Err(rusqlite::Error::QueryReturnedNoRows);
         }
@@ -1372,11 +1504,18 @@ impl Repository {
     }
 
     // ==================== ARCHIVE FEED (统一查询聚合展示层 §10) ====================
-    pub fn get_archive_feed(conn: &Connection, life_id: &str, filter_type: Option<&str>) -> Result<Vec<ArchiveItem>> {
+    pub fn get_archive_feed(
+        conn: &Connection,
+        life_id: &str,
+        filter_type: Option<&str>,
+    ) -> Result<Vec<ArchiveItem>> {
         let mut items = Vec::new();
 
         // 1. 事件 (普通与超事件)
-        if filter_type.is_none() || filter_type == Some("event") || filter_type == Some("super_event") {
+        if filter_type.is_none()
+            || filter_type == Some("event")
+            || filter_type == Some("super_event")
+        {
             let mut stmt = conn.prepare(
                 "SELECT id, kind, title, body_md, occurred_on, quote FROM event WHERE life_id = ?1 ORDER BY occurred_on DESC",
             )?;
@@ -1385,15 +1524,27 @@ impl Repository {
                 let quote: Option<String> = row.get(5)?;
                 Ok(ArchiveItem {
                     id: row.get(0)?,
-                    item_type: if kind == "super" { "super_event".to_string() } else { "event".to_string() },
+                    item_type: if kind == "super" {
+                        "super_event".to_string()
+                    } else {
+                        "event".to_string()
+                    },
                     title: row.get(2)?,
                     summary: row.get(3)?,
                     occurred_at: row.get(4)?,
                     source_id: row.get(0)?,
-                    extra_badge: quote.or_else(|| if kind == "super" { Some("超事件".to_string()) } else { Some("历史事件".to_string()) }),
+                    extra_badge: quote.or_else(|| {
+                        if kind == "super" {
+                            Some("超事件".to_string())
+                        } else {
+                            Some("历史事件".to_string())
+                        }
+                    }),
                 })
             })?;
-            for item in rows { items.push(item?); }
+            for item in rows {
+                items.push(item?);
+            }
         }
 
         // 2. 世界快照
@@ -1412,7 +1563,9 @@ impl Repository {
                     extra_badge: Some("存档".to_string()),
                 })
             })?;
-            for item in rows { items.push(item?); }
+            for item in rows {
+                items.push(item?);
+            }
         }
 
         // 3. 随笔
@@ -1431,7 +1584,9 @@ impl Repository {
                     extra_badge: Some("随笔".to_string()),
                 })
             })?;
-            for item in rows { items.push(item?); }
+            for item in rows {
+                items.push(item?);
+            }
         }
 
         // 4. 国策状态流转历史
@@ -1462,7 +1617,9 @@ impl Repository {
                     extra_badge: Some("国策动向".to_string()),
                 })
             })?;
-            for item in rows { items.push(item?); }
+            for item in rows {
+                items.push(item?);
+            }
         }
 
         // 5. 参谋会议纪要
@@ -1481,7 +1638,9 @@ impl Repository {
                     extra_badge: Some("参谋纪要".to_string()),
                 })
             })?;
-            for item in rows { items.push(item?); }
+            for item in rows {
+                items.push(item?);
+            }
         }
 
         // 按时间倒序排序
@@ -1535,7 +1694,11 @@ impl Repository {
         rows.collect()
     }
 
-    pub fn delete_world_snapshot(conn: &Connection, life_id: &str, snapshot_id: &str) -> Result<()> {
+    pub fn delete_world_snapshot(
+        conn: &Connection,
+        life_id: &str,
+        snapshot_id: &str,
+    ) -> Result<()> {
         let affected = conn.execute(
             "DELETE FROM world_snapshot WHERE id = ?1 AND life_id = ?2",
             params![snapshot_id, life_id],
@@ -1621,7 +1784,11 @@ impl Repository {
     }
 
     // ==================== SUB-FOCUS REPOSITORY ====================
-    pub fn get_sub_foci(conn: &Connection, life_id: &str, focus_id: &str) -> Result<Vec<FocusSubItem>> {
+    pub fn get_sub_foci(
+        conn: &Connection,
+        life_id: &str,
+        focus_id: &str,
+    ) -> Result<Vec<FocusSubItem>> {
         let mut stmt = conn.prepare(
             "SELECT id, life_id, focus_id, title, body_md, status, sort_order, created_at, updated_at
              FROM focus_sub_item
@@ -1712,9 +1879,18 @@ impl Repository {
         })
     }
 
-    pub fn update_sub_focus_status(conn: &Connection, life_id: &str, sub_id: &str, status: &str) -> Result<()> {
-        let _ = SubFocusStatus::from_str(status)
-            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidInput, e))))?;
+    pub fn update_sub_focus_status(
+        conn: &Connection,
+        life_id: &str,
+        sub_id: &str,
+        status: &str,
+    ) -> Result<()> {
+        let _ = SubFocusStatus::from_str(status).map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                e,
+            )))
+        })?;
         let now = chrono::Utc::now().to_rfc3339();
         let affected = conn.execute(
             "UPDATE focus_sub_item SET status = ?1, updated_at = ?2 WHERE id = ?3 AND life_id = ?4",
@@ -1769,7 +1945,10 @@ impl Repository {
         }
     }
 
-    pub fn init_default_staff_members(conn: &Connection, life_id: &str) -> Result<Vec<StaffMember>> {
+    pub fn init_default_staff_members(
+        conn: &Connection,
+        life_id: &str,
+    ) -> Result<Vec<StaffMember>> {
         let defaults = [
             ("战略参谋长", "首席长期战略顾问", "从宏观战略、路线演进与终局思维出发，推演各项重大国策的长远得失与可行节奏，拒绝短期短视。"),
             ("财政与资源总监", "财务与精力分配顾问", "关注时间、精力与财务资本的分配效率，严格计算投入产出比，防止盲目扩张导致的财政或能量透支。"),
@@ -1948,11 +2127,20 @@ impl Repository {
 
         let mut md = String::new();
         md.push_str(&format!("# 人生战略档案：{}\n\n", overview.life.name));
-        md.push_str(&format!("- 导出时间：{}\n", chrono::Utc::now().to_rfc3339()));
-        md.push_str(&format!("- 当前战略稳定度：{:?}\n\n", overview.stability.current_value));
+        md.push_str(&format!(
+            "- 导出时间：{}\n",
+            chrono::Utc::now().to_rfc3339()
+        ));
+        md.push_str(&format!(
+            "- 当前战略稳定度：{:?}\n\n",
+            overview.stability.current_value
+        ));
 
         if let Some(leader) = &overview.leader {
-            md.push_str(&format!("## 最高统帅：{}\n\n{}\n\n", leader.name, leader.body_md));
+            md.push_str(&format!(
+                "## 最高统帅：{}\n\n{}\n\n",
+                leader.name, leader.body_md
+            ));
         }
 
         if let Some(situation) = &overview.situation {
@@ -1985,8 +2173,6 @@ impl Repository {
         for f in &overview.active_foci {
             md.push_str(&format!("### 国策：{}\n\n{}\n\n", f.title, f.body_md));
         }
-
-
 
         Ok(md)
     }

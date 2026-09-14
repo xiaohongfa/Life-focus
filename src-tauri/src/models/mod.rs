@@ -136,7 +136,9 @@ impl std::str::FromStr for FocusStatus {
             "completed" => Ok(FocusStatus::Completed),
             "paused" => Ok(FocusStatus::Paused),
             "revoked" => Ok(FocusStatus::Revoked),
-            _ => Err(format!("未知的国策状态: '{s}', 允许值为 active, completed, paused, revoked")),
+            _ => Err(format!(
+                "未知的国策状态: '{s}', 允许值为 active, completed, paused, revoked"
+            )),
         }
     }
 }
@@ -165,7 +167,9 @@ impl std::str::FromStr for FocusRelationType {
         match s {
             "prerequisite" => Ok(FocusRelationType::Prerequisite),
             "mutually_exclusive" => Ok(FocusRelationType::MutuallyExclusive),
-            _ => Err(format!("未知的国策关系类型: '{s}', 允许值为 prerequisite, mutually_exclusive")),
+            _ => Err(format!(
+                "未知的国策关系类型: '{s}', 允许值为 prerequisite, mutually_exclusive"
+            )),
         }
     }
 }
@@ -185,7 +189,9 @@ impl std::str::FromStr for TraitEquipState {
             "active" => Ok(TraitEquipState::Active),
             "benched" => Ok(TraitEquipState::Benched),
             "unequipped" => Ok(TraitEquipState::Unequipped),
-            _ => Err(format!("未知的特质装备状态: '{s}', 允许值为 active, benched, unequipped")),
+            _ => Err(format!(
+                "未知的特质装备状态: '{s}', 允许值为 active, benched, unequipped"
+            )),
         }
     }
 }
@@ -207,7 +213,9 @@ impl std::str::FromStr for SubFocusStatus {
             "in_progress" => Ok(SubFocusStatus::InProgress),
             "done" => Ok(SubFocusStatus::Done),
             "canceled" => Ok(SubFocusStatus::Canceled),
-            _ => Err(format!("未知的子国策状态: '{s}', 允许值为 todo, in_progress, done, canceled")),
+            _ => Err(format!(
+                "未知的子国策状态: '{s}', 允许值为 todo, in_progress, done, canceled"
+            )),
         }
     }
 }
@@ -245,7 +253,9 @@ impl std::str::FromStr for StaffMeetingStatus {
             "in_progress" => Ok(StaffMeetingStatus::InProgress),
             "completed" => Ok(StaffMeetingStatus::Completed),
             "aborted" => Ok(StaffMeetingStatus::Aborted),
-            _ => Err(format!("未知的参谋会议状态: '{s}', 允许值为 in_progress, completed, aborted")),
+            _ => Err(format!(
+                "未知的参谋会议状态: '{s}', 允许值为 in_progress, completed, aborted"
+            )),
         }
     }
 }

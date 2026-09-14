@@ -12,9 +12,8 @@ pub struct DbState {
 impl DbState {
     pub fn new<P: AsRef<Path>>(data_dir: P) -> Result<Self> {
         let dir = data_dir.as_ref();
-        std::fs::create_dir_all(dir).map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(e))
-        })?;
+        std::fs::create_dir_all(dir)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
         let db_path = dir.join("life_strategy.db");
         let mut conn = Connection::open(&db_path)?;
@@ -24,7 +23,7 @@ impl DbState {
             "PRAGMA foreign_keys = ON;
              PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
-             PRAGMA busy_timeout = 5000;"
+             PRAGMA busy_timeout = 5000;",
         )?;
 
         // 执行初始迁移

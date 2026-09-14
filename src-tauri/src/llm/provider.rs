@@ -32,19 +32,18 @@ pub fn validate_url_security(url_str: &str) -> Result<(), String> {
         return Err("API 端点地址不能为空".to_string());
     }
 
-    let parsed = Url::parse(trimmed)
-        .map_err(|e| format!("无效的 URL 格式: {e}"))?;
+    let parsed = Url::parse(trimmed).map_err(|e| format!("无效的 URL 格式: {e}"))?;
 
     match parsed.scheme() {
         "https" => Ok(()),
-        "http" => {
-            match parsed.host() {
-                Some(url::Host::Domain(d)) if d.eq_ignore_ascii_case("localhost") => Ok(()),
-                Some(url::Host::Ipv4(ip)) if ip.is_loopback() => Ok(()),
-                Some(url::Host::Ipv6(ip)) if ip.is_loopback() => Ok(()),
-                _ => Err("出于安全防护考虑，非本机的远程大模型端点必须使用 https:// 加密协议".to_string()),
-            }
-        }
+        "http" => match parsed.host() {
+            Some(url::Host::Domain(d)) if d.eq_ignore_ascii_case("localhost") => Ok(()),
+            Some(url::Host::Ipv4(ip)) if ip.is_loopback() => Ok(()),
+            Some(url::Host::Ipv6(ip)) if ip.is_loopback() => Ok(()),
+            _ => Err(
+                "出于安全防护考虑，非本机的远程大模型端点必须使用 https:// 加密协议".to_string(),
+            ),
+        },
         _ => Err("无效的 URL 协议格式，请输入 https:// 或本地 http:// 地址".to_string()),
     }
 }
@@ -62,7 +61,10 @@ pub fn build_gemini_endpoint(base_url: &str, model: &str, api_key: &str) -> Stri
     if base == "https://api.deepseek.com" || base == "https://api.openai.com/v1" {
         base = "https://generativelanguage.googleapis.com".to_string();
     }
-    format!("{base}/v1beta/models/{model}:generateContent?key={}", api_key.trim())
+    format!(
+        "{base}/v1beta/models/{model}:generateContent?key={}",
+        api_key.trim()
+    )
 }
 
 pub async fn execute_chat(
@@ -115,7 +117,12 @@ async fn execute_openai_compatible(
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("网络请求发送异常: {}", sanitize_error(&e.to_string(), api_key)))?;
+        .map_err(|e| {
+            format!(
+                "网络请求发送异常: {}",
+                sanitize_error(&e.to_string(), api_key)
+            )
+        })?;
 
     let status = resp.status();
     if !status.is_success() {
@@ -180,7 +187,11 @@ async fn execute_gemini(
         .iter()
         .filter(|m| m.role != "system")
         .map(|m| {
-            let role = if m.role == "assistant" { "model" } else { "user" };
+            let role = if m.role == "assistant" {
+                "model"
+            } else {
+                "user"
+            };
             serde_json::json!({
                 "role": role,
                 "parts": [{ "text": m.content }]
@@ -208,7 +219,12 @@ async fn execute_gemini(
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("Gemini 网络请求异常: {}", sanitize_error(&e.to_string(), api_key)))?;
+        .map_err(|e| {
+            format!(
+                "Gemini 网络请求异常: {}",
+                sanitize_error(&e.to_string(), api_key)
+            )
+        })?;
 
     let status = resp.status();
     if !status.is_success() {
