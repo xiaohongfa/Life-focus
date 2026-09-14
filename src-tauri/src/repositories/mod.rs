@@ -1,4 +1,5 @@
 use rusqlite::{params, Connection, Result};
+use std::str::FromStr;
 use uuid::Uuid;
 use crate::models::*;
 
@@ -88,16 +89,22 @@ impl Repository {
 
     pub fn rename_life(conn: &Connection, life_id: &str, name: &str) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE life SET name = ?1, updated_at = ?2 WHERE id = ?3",
             params![name, now, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("人生世界不存在"));
+        }
         Ok(())
     }
 
     pub fn delete_life(conn: &mut Connection, life_id: &str) -> Result<()> {
         let tx = conn.transaction()?;
-        tx.execute("DELETE FROM life WHERE id = ?1", params![life_id])?;
+        let affected = tx.execute("DELETE FROM life WHERE id = ?1", params![life_id])?;
+        if affected == 0 {
+            return Err(custom_err("人生世界不存在"));
+        }
         tx.commit()?;
         Ok(())
     }
@@ -237,6 +244,7 @@ impl Repository {
         rows.collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_focus(
         conn: &mut Connection,
         life_id: &str,
@@ -248,6 +256,8 @@ impl Repository {
         pos_x: f64,
         pos_y: f64,
     ) -> Result<Focus> {
+        let parsed_status: FocusStatus = status.parse().map_err(|e: String| custom_err(e))?;
+        let status_str = parsed_status.as_str();
         let focus_id = Uuid::new_v4().to_string();
         let history_id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
@@ -256,13 +266,13 @@ impl Repository {
         tx.execute(
             "INSERT INTO focus (id, life_id, title, body_md, icon, image_attachment_id, status, position_x, position_y, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
-            params![focus_id, life_id, title, body_md, icon, image_attachment_id, status, pos_x, pos_y, now],
+            params![focus_id, life_id, title, body_md, icon, image_attachment_id, status_str, pos_x, pos_y, now],
         )?;
 
         tx.execute(
             "INSERT INTO focus_status_history (id, life_id, focus_id, from_status, to_status, occurred_at, recorded_at, reason)
              VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?5, '初始创建')",
-            params![history_id, life_id, focus_id, status, now],
+            params![history_id, life_id, focus_id, status_str, now],
         )?;
 
         tx.commit()?;
@@ -274,7 +284,7 @@ impl Repository {
             body_md: body_md.to_string(),
             icon: icon.map(String::from),
             image_attachment_id: image_attachment_id.map(String::from),
-            status: status.to_string(),
+            status: status_str.to_string(),
             position_x: pos_x,
             position_y: pos_y,
             created_at: now.clone(),
@@ -291,27 +301,38 @@ impl Repository {
         source_type: Option<&str>,
         source_id: Option<&str>,
     ) -> Result<()> {
+        let parsed_status: FocusStatus = new_status.parse().map_err(|e: String| custom_err(e))?;
+        let status_str = parsed_status.as_str();
         let now = chrono::Utc::now().to_rfc3339();
         let history_id = Uuid::new_v4().to_string();
 
         let tx = conn.transaction()?;
 
-        let current_status: String = tx.query_row(
+        let current_status: String = match tx.query_row(
             "SELECT status FROM focus WHERE id = ?1 AND life_id = ?2",
             params![focus_id, life_id],
             |row| row.get(0),
-        )?;
+        ) {
+            Ok(s) => s,
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                return Err(custom_err("指定国策不存在或不属于当前人生世界"));
+            }
+            Err(e) => return Err(e),
+        };
 
-        if current_status != new_status {
-            tx.execute(
+        if current_status != status_str {
+            let affected = tx.execute(
                 "UPDATE focus SET status = ?1, updated_at = ?2 WHERE id = ?3 AND life_id = ?4",
-                params![new_status, now, focus_id, life_id],
+                params![status_str, now, focus_id, life_id],
             )?;
+            if affected == 0 {
+                return Err(custom_err("指定国策不存在或不属于当前人生世界"));
+            }
 
             tx.execute(
                 "INSERT INTO focus_status_history (id, life_id, focus_id, from_status, to_status, occurred_at, recorded_at, reason, source_type, source_id)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7, ?8, ?9)",
-                params![history_id, life_id, focus_id, current_status, new_status, now, reason, source_type, source_id],
+                params![history_id, life_id, focus_id, current_status, status_str, now, reason, source_type, source_id],
             )?;
         }
 
@@ -327,10 +348,13 @@ impl Repository {
         pos_y: f64,
     ) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE focus SET position_x = ?1, position_y = ?2, updated_at = ?3 WHERE id = ?4 AND life_id = ?5",
             params![pos_x, pos_y, now, focus_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("指定国策不存在或不属于当前人生世界"));
+        }
         Ok(())
     }
 
@@ -344,11 +368,14 @@ impl Repository {
         image_attachment_id: Option<&str>,
     ) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE focus SET title = ?1, body_md = ?2, icon = ?3, image_attachment_id = ?4, updated_at = ?5
              WHERE id = ?6 AND life_id = ?7",
             params![title, body_md, icon, image_attachment_id, now, focus_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("指定国策不存在或不属于当前人生世界"));
+        }
         Ok(())
     }
 
@@ -359,13 +386,20 @@ impl Repository {
             params![life_id, focus_id],
         )?;
         tx.execute(
-            "DELETE FROM focus_status_history WHERE life_id = ?1 AND focus_id = ?2",
+            "DELETE FROM focus_sub_item WHERE life_id = ?1 AND focus_id = ?2",
             params![life_id, focus_id],
         )?;
         tx.execute(
+            "DELETE FROM focus_status_history WHERE life_id = ?1 AND focus_id = ?2",
+            params![life_id, focus_id],
+        )?;
+        let affected = tx.execute(
             "DELETE FROM focus WHERE id = ?1 AND life_id = ?2",
             params![focus_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("指定国策不存在或不属于当前人生世界"));
+        }
         tx.commit()?;
         Ok(())
     }
@@ -378,6 +412,7 @@ impl Repository {
         relation_type: &str,
         note: Option<&str>,
     ) -> Result<FocusRelation> {
+        let _parsed_rel: FocusRelationType = relation_type.parse().map_err(|e: String| custom_err(e))?;
         if source_id == target_id {
             return Err(custom_err("Focus relation cannot connect a node to itself"));
         }
@@ -466,10 +501,13 @@ impl Repository {
     }
 
     pub fn delete_focus_relation(conn: &Connection, life_id: &str, relation_id: &str) -> Result<()> {
-        conn.execute(
+        let affected = conn.execute(
             "DELETE FROM focus_relation WHERE id = ?1 AND life_id = ?2",
             params![relation_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("国策关联不存在或不属于当前人生世界"));
+        }
         Ok(())
     }
 
@@ -547,10 +585,13 @@ impl Repository {
         portrait_attachment_id: Option<&str>,
     ) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE leader SET name = ?1, body_md = ?2, portrait_attachment_id = ?3, updated_at = ?4 WHERE life_id = ?5",
             params![name, body_md, portrait_attachment_id, now, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("最高统帅档案不存在"));
+        }
         Ok(())
     }
 
@@ -573,10 +614,13 @@ impl Repository {
 
     pub fn update_situation(conn: &Connection, life_id: &str, body_md: &str) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE situation SET body_md = ?1, updated_at = ?2 WHERE life_id = ?3",
             params![body_md, now, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("局势档案不存在"));
+        }
         Ok(())
     }
 
@@ -599,10 +643,13 @@ impl Repository {
 
     pub fn update_philosophy(conn: &Connection, life_id: &str, body_md: &str) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE philosophy SET body_md = ?1, updated_at = ?2 WHERE life_id = ?3",
             params![body_md, now, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("底层哲学档案不存在"));
+        }
         Ok(())
     }
 
@@ -652,10 +699,13 @@ impl Repository {
 
     pub fn update_trait(conn: &Connection, life_id: &str, trait_id: &str, title: &str, body_md: &str, icon: Option<&str>) -> Result<Trait> {
         let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE trait SET title = ?1, body_md = ?2, icon = ?3, updated_at = ?4 WHERE id = ?5 AND life_id = ?6",
             params![title, body_md, icon, now, trait_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("特质不存在或不属于当前人生世界"));
+        }
         let mut stmt = conn.prepare(
             "SELECT id, title, body_md, icon, archived_at, created_at, updated_at, equip_state FROM trait WHERE id = ?1 AND life_id = ?2",
         )?;
@@ -678,36 +728,47 @@ impl Repository {
         }
     }
 
-    pub fn set_active_trait_stage(conn: &Connection, life_id: &str, group_trait_ids: &[String], active_trait_id: &str) -> Result<()> {
+    pub fn set_active_trait_stage(conn: &mut Connection, life_id: &str, group_trait_ids: &[String], active_trait_id: &str) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
+        let tx = conn.transaction()?;
         for tid in group_trait_ids {
-            let (equip_state, icon_val) = if tid == active_trait_id {
-                ("active", Some("active"))
+            let equip_state = if tid == active_trait_id {
+                "active"
             } else {
-                ("unequipped", None)
+                "unequipped"
             };
-            conn.execute(
-                "UPDATE trait SET equip_state = ?1, icon = ?2, updated_at = ?3 WHERE id = ?4 AND life_id = ?5",
-                params![equip_state, icon_val, now, tid, life_id],
+            // 纯更新 equip_state，决不允许覆盖或清空 icon 视觉图标！
+            let affected = tx.execute(
+                "UPDATE trait SET equip_state = ?1, updated_at = ?2 WHERE id = ?3 AND life_id = ?4",
+                params![equip_state, now, tid, life_id],
             )?;
+            if affected == 0 {
+                return Err(custom_err("特质不存在或不属于当前人生世界"));
+            }
         }
+        tx.commit()?;
         Ok(())
     }
 
     pub fn set_trait_equipped(
-        conn: &Connection,
+        conn: &mut Connection,
         life_id: &str,
         trait_ids: &[String],
         equip: bool,
         target_active_id: Option<&str>,
     ) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
+        let tx = conn.transaction()?;
         if !equip {
             for tid in trait_ids {
-                conn.execute(
-                    "UPDATE trait SET equip_state = 'benched', icon = 'benched', updated_at = ?1 WHERE id = ?2 AND life_id = ?3",
+                // 待命下阵：纯更新 equip_state = 'benched'，决不允许覆盖或清空 icon！
+                let affected = tx.execute(
+                    "UPDATE trait SET equip_state = 'benched', updated_at = ?1 WHERE id = ?2 AND life_id = ?3",
                     params![now, tid, life_id],
                 )?;
+                if affected == 0 {
+                    return Err(custom_err("特质不存在或不属于当前人生世界"));
+                }
             }
         } else {
             let active_id = target_active_id
@@ -715,17 +776,22 @@ impl Repository {
                 .or_else(|| trait_ids.first().cloned())
                 .unwrap_or_default();
             for tid in trait_ids {
-                let (equip_state, icon_val) = if tid == &active_id {
-                    ("active", Some("active"))
+                let equip_state = if tid == &active_id {
+                    "active"
                 } else {
-                    ("unequipped", None)
+                    "unequipped"
                 };
-                conn.execute(
-                    "UPDATE trait SET equip_state = ?1, icon = ?2, updated_at = ?3 WHERE id = ?4 AND life_id = ?5",
-                    params![equip_state, icon_val, now, tid, life_id],
+                // 重新激活上阵：纯更新 equip_state，决不碰触 icon！
+                let affected = tx.execute(
+                    "UPDATE trait SET equip_state = ?1, updated_at = ?2 WHERE id = ?3 AND life_id = ?4",
+                    params![equip_state, now, tid, life_id],
                 )?;
+                if affected == 0 {
+                    return Err(custom_err("特质不存在或不属于当前人生世界"));
+                }
             }
         }
+        tx.commit()?;
         Ok(())
     }
 
@@ -778,10 +844,10 @@ impl Repository {
             }
 
             let is_benched = |t: &Trait| -> bool {
-                t.equip_state.as_deref() == Some("benched") || t.icon.as_deref() == Some("benched")
+                t.equip_state.as_deref() == Some("benched")
             };
             let is_active = |t: &Trait| -> bool {
-                t.equip_state.as_deref() == Some("active") || t.icon.as_deref() == Some("active")
+                t.equip_state.as_deref() == Some("active")
             };
 
             if component_traits.len() == 1 {
@@ -812,10 +878,13 @@ impl Repository {
 
     pub fn archive_trait(conn: &Connection, life_id: &str, trait_id: &str, archive: bool) -> Result<()> {
         let now = if archive { Some(chrono::Utc::now().to_rfc3339()) } else { None };
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE trait SET archived_at = ?1 WHERE id = ?2 AND life_id = ?3",
             params![now, trait_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("特质不存在或不属于当前人生世界"));
+        }
         Ok(())
     }
 
@@ -825,10 +894,13 @@ impl Repository {
             "DELETE FROM trait_relation WHERE life_id = ?1 AND (predecessor_id = ?2 OR successor_id = ?2)",
             params![life_id, trait_id],
         )?;
-        tx.execute(
+        let affected = tx.execute(
             "DELETE FROM trait WHERE id = ?1 AND life_id = ?2",
             params![trait_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("特质不存在或不属于当前人生世界"));
+        }
         tx.commit()?;
         Ok(())
     }
@@ -938,10 +1010,13 @@ impl Repository {
         life_id: &str,
         relation_id: &str,
     ) -> Result<()> {
-        conn.execute(
+        let affected = conn.execute(
             "DELETE FROM trait_relation WHERE id = ?1 AND life_id = ?2",
             params![relation_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("特质演化关系不存在或不属于当前人生世界"));
+        }
         Ok(())
     }
 
@@ -951,10 +1026,13 @@ impl Repository {
         pred_id: &str,
         succ_id: &str,
     ) -> Result<()> {
-        conn.execute(
+        let affected = conn.execute(
             "DELETE FROM trait_relation WHERE predecessor_id = ?1 AND successor_id = ?2 AND life_id = ?3",
             params![pred_id, succ_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("特质演化关系不存在或不属于当前人生世界"));
+        }
         Ok(())
     }
 
@@ -1004,19 +1082,25 @@ impl Repository {
 
     pub fn archive_ideology(conn: &Connection, life_id: &str, ideology_id: &str, archive: bool) -> Result<()> {
         let now = if archive { Some(chrono::Utc::now().to_rfc3339()) } else { None };
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE ideology SET archived_at = ?1 WHERE id = ?2 AND life_id = ?3",
             params![now, ideology_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("意识形态不存在或不属于当前人生世界"));
+        }
         Ok(())
     }
 
     pub fn update_ideology(conn: &Connection, life_id: &str, ideology_id: &str, title: &str, body_md: &str, icon: Option<&str>) -> Result<Ideology> {
         let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE ideology SET title = ?1, body_md = ?2, icon = ?3, updated_at = ?4 WHERE id = ?5 AND life_id = ?6",
             params![title, body_md, icon, now, ideology_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("意识形态不存在或不属于当前人生世界"));
+        }
         let mut stmt = conn.prepare(
             "SELECT id, title, body_md, icon, sort_order, archived_at, created_at, updated_at FROM ideology WHERE id = ?1 AND life_id = ?2",
         )?;
@@ -1040,10 +1124,13 @@ impl Repository {
     }
 
     pub fn delete_ideology(conn: &Connection, life_id: &str, ideology_id: &str) -> Result<()> {
-        conn.execute(
+        let affected = conn.execute(
             "DELETE FROM ideology WHERE id = ?1 AND life_id = ?2",
             params![ideology_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("意识形态不存在或不属于当前人生世界"));
+        }
         Ok(())
     }
 
@@ -1091,19 +1178,25 @@ impl Repository {
 
     pub fn archive_national_spirit(conn: &Connection, life_id: &str, spirit_id: &str, archive: bool) -> Result<()> {
         let now = if archive { Some(chrono::Utc::now().to_rfc3339()) } else { None };
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE national_spirit SET archived_at = ?1 WHERE id = ?2 AND life_id = ?3",
             params![now, spirit_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("国家精神不存在或不属于当前人生世界"));
+        }
         Ok(())
     }
 
     pub fn update_national_spirit(conn: &Connection, life_id: &str, spirit_id: &str, title: &str, body_md: &str, icon: Option<&str>) -> Result<NationalSpirit> {
         let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE national_spirit SET title = ?1, body_md = ?2, icon = ?3, updated_at = ?4 WHERE id = ?5 AND life_id = ?6",
             params![title, body_md, icon, now, spirit_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("国家精神不存在或不属于当前人生世界"));
+        }
         let mut stmt = conn.prepare(
             "SELECT id, title, body_md, icon, archived_at, created_at, updated_at FROM national_spirit WHERE id = ?1 AND life_id = ?2",
         )?;
@@ -1126,10 +1219,13 @@ impl Repository {
     }
 
     pub fn delete_national_spirit(conn: &Connection, life_id: &str, spirit_id: &str) -> Result<()> {
-        conn.execute(
+        let affected = conn.execute(
             "DELETE FROM national_spirit WHERE id = ?1 AND life_id = ?2",
             params![spirit_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("国家精神不存在或不属于当前人生世界"));
+        }
         Ok(())
     }
 
@@ -1156,6 +1252,7 @@ impl Repository {
         rows.collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_event(
         conn: &Connection,
         life_id: &str,
@@ -1167,19 +1264,36 @@ impl Repository {
         quote: Option<&str>,
         snapshot_id: Option<&str>,
     ) -> Result<Event> {
+        let parsed_kind: EventKind = kind.parse().map_err(|e: String| custom_err(e))?;
+        let kind_str = match parsed_kind {
+            EventKind::Normal => "normal",
+            EventKind::Super => "super",
+        };
+
+        if let Some(snap_id) = snapshot_id {
+            let snap_valid: bool = conn.query_row(
+                "SELECT COUNT(*) = 1 FROM world_snapshot WHERE id = ?1 AND life_id = ?2",
+                params![snap_id, life_id],
+                |row| row.get(0),
+            )?;
+            if !snap_valid {
+                return Err(custom_err("关联的世界快照不存在或不属于当前人生世界"));
+            }
+        }
+
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
             "INSERT INTO event (id, life_id, title, body_md, kind, occurred_on, image_attachment_id, quote, snapshot_id, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
-            params![id, life_id, title, body_md, kind, occurred_on, image_attachment_id, quote, snapshot_id, now],
+            params![id, life_id, title, body_md, kind_str, occurred_on, image_attachment_id, quote, snapshot_id, now],
         )?;
         Ok(Event {
             id,
             life_id: life_id.to_string(),
             title: title.to_string(),
             body_md: body_md.to_string(),
-            kind: kind.to_string(),
+            kind: kind_str.to_string(),
             occurred_on: occurred_on.to_string(),
             image_attachment_id: image_attachment_id.map(String::from),
             quote: quote.map(String::from),
@@ -1422,10 +1536,13 @@ impl Repository {
     }
 
     pub fn delete_world_snapshot(conn: &Connection, life_id: &str, snapshot_id: &str) -> Result<()> {
-        conn.execute(
+        let affected = conn.execute(
             "DELETE FROM world_snapshot WHERE id = ?1 AND life_id = ?2",
             params![snapshot_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(custom_err("世界快照不存在或不属于当前人生世界"));
+        }
         Ok(())
     }
 
@@ -1557,6 +1674,15 @@ impl Repository {
         title: &str,
         body_md: Option<&str>,
     ) -> Result<FocusSubItem> {
+        let focus_exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM focus WHERE id = ?1 AND life_id = ?2)",
+            params![focus_id, life_id],
+            |row| row.get(0),
+        )?;
+        if !focus_exists {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         let next_sort: i64 = conn
@@ -1587,19 +1713,27 @@ impl Repository {
     }
 
     pub fn update_sub_focus_status(conn: &Connection, life_id: &str, sub_id: &str, status: &str) -> Result<()> {
+        let _ = SubFocusStatus::from_str(status)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidInput, e))))?;
         let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE focus_sub_item SET status = ?1, updated_at = ?2 WHERE id = ?3 AND life_id = ?4",
             params![status, now, sub_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
         Ok(())
     }
 
     pub fn delete_sub_focus(conn: &Connection, life_id: &str, sub_id: &str) -> Result<()> {
-        conn.execute(
+        let affected = conn.execute(
             "DELETE FROM focus_sub_item WHERE id = ?1 AND life_id = ?2",
             params![sub_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
         Ok(())
     }
 
@@ -1719,19 +1853,25 @@ impl Repository {
         enabled: bool,
     ) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE staff_member SET name = ?1, role = ?2, prompt = ?3, enabled = ?4, updated_at = ?5
              WHERE id = ?6 AND life_id = ?7",
             params![name, role, prompt, if enabled { 1 } else { 0 }, now, member_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
         Ok(())
     }
 
     pub fn delete_staff_member(conn: &Connection, life_id: &str, member_id: &str) -> Result<()> {
-        conn.execute(
+        let affected = conn.execute(
             "DELETE FROM staff_member WHERE id = ?1 AND life_id = ?2",
             params![member_id, life_id],
         )?;
+        if affected == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
         Ok(())
     }
 
@@ -1772,7 +1912,7 @@ impl Repository {
         let tx = conn.transaction()?;
         tx.execute(
             "INSERT INTO staff_meeting (id, life_id, topic, confirmed_minutes_md, context_module_names, rounds, status, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'confirmed', ?7)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'completed', ?7)",
             params![meeting_id, life_id, topic, confirmed_minutes_md, context_module_names, rounds, now],
         )?;
 
@@ -1794,7 +1934,7 @@ impl Repository {
             confirmed_minutes_md: Some(confirmed_minutes_md.to_string()),
             context_module_names: context_module_names.to_string(),
             rounds,
-            status: "confirmed".to_string(),
+            status: "completed".to_string(),
             created_at: now,
         })
     }

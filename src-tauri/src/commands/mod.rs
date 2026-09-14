@@ -85,6 +85,7 @@ pub fn get_focus_relations(state: State<'_, DbState>, life_id: String) -> Result
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn create_focus(
     state: State<'_, DbState>,
     life_id: String,
@@ -361,6 +362,7 @@ pub fn get_events(state: State<'_, DbState>, life_id: String) -> Result<Vec<Even
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn create_event(
     state: State<'_, DbState>,
     life_id: String,
@@ -638,8 +640,8 @@ pub fn set_active_trait_stage(
     group_trait_ids: Vec<String>,
     active_trait_id: String,
 ) -> Result<(), String> {
-    let conn = state.conn.lock().map_err(map_err)?;
-    Repository::set_active_trait_stage(&conn, &life_id, &group_trait_ids, &active_trait_id).map_err(map_err)
+    let mut conn = state.conn.lock().map_err(map_err)?;
+    Repository::set_active_trait_stage(&mut conn, &life_id, &group_trait_ids, &active_trait_id).map_err(map_err)
 }
 
 #[tauri::command]
@@ -650,8 +652,8 @@ pub fn set_trait_equipped(
     equip: bool,
     target_active_id: Option<String>,
 ) -> Result<(), String> {
-    let conn = state.conn.lock().map_err(map_err)?;
-    Repository::set_trait_equipped(&conn, &life_id, &trait_ids, equip, target_active_id.as_deref()).map_err(map_err)
+    let mut conn = state.conn.lock().map_err(map_err)?;
+    Repository::set_trait_equipped(&mut conn, &life_id, &trait_ids, equip, target_active_id.as_deref()).map_err(map_err)
 }
 
 #[tauri::command]

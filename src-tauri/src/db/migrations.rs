@@ -25,6 +25,11 @@ pub static MIGRATIONS: &[Migration] = &[
         name: "003_integrity_hardening",
         sql: include_str!("../../migrations/003_integrity_hardening.sql"),
     },
+    Migration {
+        version: 4,
+        name: "004_trait_equip_state_constraints",
+        sql: include_str!("../../migrations/004_trait_equip_state_constraints.sql"),
+    },
 ];
 
 fn compute_sha256(content: &str) -> String {

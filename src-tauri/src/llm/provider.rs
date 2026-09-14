@@ -271,7 +271,7 @@ pub fn sanitize_error(msg: &str, api_key: &str) -> String {
         result.push_str(&remaining[..pos + 4]);
         let after_key = &remaining[pos + 4..];
         let val_len = after_key
-            .find(|c: char| c == '&' || c == ' ' || c == '"' || c == '\'' || c == '\n' || c == '\r')
+            .find(['&', ' ', '"', '\'', '\n', '\r'])
             .unwrap_or(after_key.len());
         result.push_str("******");
         remaining = &after_key[val_len..];

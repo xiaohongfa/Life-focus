@@ -318,13 +318,13 @@ fn test_trait_and_ideology_and_spirit_crud_and_delete_life() {
 
     // 设置 t2 为当前阶段
     let group_ids = vec![t1.id.clone(), t2.id.clone()];
-    Repository::set_active_trait_stage(&conn, &life.id, &group_ids, &t2.id).unwrap();
+    Repository::set_active_trait_stage(&mut conn, &life.id, &group_ids, &t2.id).unwrap();
 
     let traits_after = Repository::get_traits(&conn, &life.id, false).unwrap();
     let t2_fetched = traits_after.iter().find(|t| t.id == t2.id).unwrap();
-    assert_eq!(t2_fetched.icon.as_deref(), Some("active"));
+    assert_eq!(t2_fetched.equip_state.as_deref(), Some("active"));
     let t1_fetched = traits_after.iter().find(|t| t.id == t1.id).unwrap();
-    assert_eq!(t1_fetched.icon, None);
+    assert_eq!(t1_fetched.equip_state.as_deref(), Some("unequipped"));
 
     // 2. Ideology update & delete
     let ideo = Repository::create_ideology(&conn, &life.id, "原初自由意志", "强调探索与实验", None).unwrap();
@@ -397,7 +397,7 @@ fn test_active_equipped_traits_and_stage_mutual_exclusion() {
 
     // 5. 标定四角洲能力所处阶段为第3阶 (s3)
     let s_group = vec![s1.id.clone(), s2.id.clone(), s3.id.clone(), s4.id.clone(), s5.id.clone()];
-    Repository::set_active_trait_stage(&conn, &life.id, &s_group, &s3.id).unwrap();
+    Repository::set_active_trait_stage(&mut conn, &life.id, &s_group, &s3.id).unwrap();
 
     let overview2 = Repository::get_world_overview(&conn, &life.id).unwrap().unwrap();
     assert_eq!(overview2.traits.len(), 3);
@@ -406,14 +406,14 @@ fn test_active_equipped_traits_and_stage_mutual_exclusion() {
     assert_eq!(active_s.title, "四角洲能力 等级3");
 
     // 6. 将四角洲能力整条谱系设为【待命】(下阵)
-    Repository::set_trait_equipped(&conn, &life.id, &s_group, false, None).unwrap();
+    Repository::set_trait_equipped(&mut conn, &life.id, &s_group, false, None).unwrap();
 
     let overview3 = Repository::get_world_overview(&conn, &life.id).unwrap().unwrap();
     assert_eq!(overview3.traits.len(), 2, "四角洲待命下阵后，活跃心智特质应只剩三角洲与独立特质共2项");
     assert!(!overview3.traits.iter().any(|t| t.title.starts_with("四角洲能力")));
 
     // 7. 将四角洲能力重新【上阵激活】，并指定激活第4阶 (s4)
-    Repository::set_trait_equipped(&conn, &life.id, &s_group, true, Some(&s4.id)).unwrap();
+    Repository::set_trait_equipped(&mut conn, &life.id, &s_group, true, Some(&s4.id)).unwrap();
 
     let overview4 = Repository::get_world_overview(&conn, &life.id).unwrap().unwrap();
     assert_eq!(overview4.traits.len(), 3);
@@ -482,7 +482,7 @@ fn test_trait_equip_state_migration_and_integrity() {
     assert_eq!(t.equip_state.as_deref(), Some("unequipped"));
 
     let group = vec![t.id.clone()];
-    Repository::set_active_trait_stage(&conn, &life.id, &group, &t.id).unwrap();
+    Repository::set_active_trait_stage(&mut conn, &life.id, &group, &t.id).unwrap();
 
     let fetched = Repository::get_traits(&conn, &life.id, false).unwrap();
     assert_eq!(fetched[0].equip_state.as_deref(), Some("active"));
@@ -545,6 +545,144 @@ fn test_export_security_and_isolation() {
     assert!(!md_a.contains("绝密世界B"));
     assert!(!md_a.contains("B的专属国策"));
     assert!(!md_a.contains("api_key"));
+}
+
+#[test]
+fn test_trait_icon_preserved_on_equip_changes() {
+    let state = DbState::in_memory().unwrap();
+    let mut conn = state.conn.lock().unwrap();
+
+    let life = Repository::create_life(&mut conn, "图标保留测试空间").unwrap();
+    let custom_icon = "hoi4-style-shield.svg";
+    let t = Repository::create_trait(&conn, &life.id, "装甲先锋", "装甲战术专家", Some(custom_icon)).unwrap();
+    assert_eq!(t.icon.as_deref(), Some(custom_icon));
+    assert_eq!(t.equip_state.as_deref(), Some("unequipped"));
+
+    // 1. 激活特质阶段：equip_state -> active, icon 必须完好无损保留！
+    let group = vec![t.id.clone()];
+    Repository::set_active_trait_stage(&mut conn, &life.id, &group, &t.id).unwrap();
+    let fetched1 = Repository::get_traits(&conn, &life.id, false).unwrap();
+    assert_eq!(fetched1[0].equip_state.as_deref(), Some("active"));
+    assert_eq!(fetched1[0].icon.as_deref(), Some(custom_icon), "切换为 active 必须保留用户配置的 icon");
+
+    // 2. 待命下阵：equip_state -> benched, icon 必须完好无损保留！
+    Repository::set_trait_equipped(&mut conn, &life.id, &group, false, None).unwrap();
+    let fetched2 = Repository::get_traits(&conn, &life.id, false).unwrap();
+    assert_eq!(fetched2[0].equip_state.as_deref(), Some("benched"));
+    assert_eq!(fetched2[0].icon.as_deref(), Some(custom_icon), "待命下阵后必须保留用户配置的 icon");
+
+    // 3. 重新上阵：equip_state -> active, icon 必须完好无损保留！
+    Repository::set_trait_equipped(&mut conn, &life.id, &group, true, Some(&t.id)).unwrap();
+    let fetched3 = Repository::get_traits(&conn, &life.id, false).unwrap();
+    assert_eq!(fetched3[0].equip_state.as_deref(), Some("active"));
+    assert_eq!(fetched3[0].icon.as_deref(), Some(custom_icon), "重新上阵后必须保留用户配置的 icon");
+}
+
+#[test]
+fn test_cross_life_sub_focus_and_snapshot_rejection() {
+    let state = DbState::in_memory().unwrap();
+    let mut conn = state.conn.lock().unwrap();
+
+    let life_a = Repository::create_life(&mut conn, "世界A").unwrap();
+    let life_b = Repository::create_life(&mut conn, "世界B").unwrap();
+
+    let focus_b = Repository::create_focus(
+        &mut conn,
+        &life_b.id,
+        "世界B的国策",
+        "国策详情",
+        None,
+        None,
+        "active",
+        0.0,
+        0.0,
+    )
+    .unwrap();
+
+    // 在世界A中试图为世界B的国策创建子事项 -> 必须拒绝
+    let cross_sub_res = Repository::create_sub_focus(&conn, &life_a.id, &focus_b.id, "非法跨界子项", None);
+    assert!(cross_sub_res.is_err(), "严禁跨人生世界创建子事项");
+
+    // 在世界B创建世界快照
+    let snap_b = Repository::create_world_snapshot(&conn, &life_b.id, "快照B", Some("世界B的快照"), "{}").unwrap();
+
+    // 在世界A中试图关联世界B的快照创建大事记 -> 必须拒绝
+    let cross_event_res = Repository::create_event(
+        &conn,
+        &life_a.id,
+        "跨界大事记",
+        "详情",
+        "historical",
+        "2026-09-14",
+        None,
+        None,
+        Some(&snap_b.id),
+    );
+    assert!(cross_event_res.is_err(), "严禁跨人生世界关联大事记快照");
+}
+
+#[test]
+fn test_invalid_enum_validation_and_affected_row_checks() {
+    let state = DbState::in_memory().unwrap();
+    let mut conn = state.conn.lock().unwrap();
+
+    let life = Repository::create_life(&mut conn, "枚举与影响行测试空间").unwrap();
+
+    // 1. 无效国策状态校验
+    let invalid_focus_res = Repository::create_focus(
+        &mut conn,
+        &life.id,
+        "非法状态国策",
+        "详情",
+        None,
+        None,
+        "not_a_real_status",
+        0.0,
+        0.0,
+    );
+    assert!(invalid_focus_res.is_err(), "未定义国策状态必须在入库前拒绝");
+
+    // 2. 无效大事记类型校验
+    let invalid_event_res = Repository::create_event(
+        &conn,
+        &life.id,
+        "非法事件",
+        "详情",
+        "illegal_kind",
+        "2026-09-14",
+        None,
+        None,
+        None,
+    );
+    assert!(invalid_event_res.is_err(), "未定义大事记类型必须在入库前拒绝");
+
+    // 3. 正常创建并测试无效子事项状态与影响行
+    let valid_focus = Repository::create_focus(
+        &mut conn,
+        &life.id,
+        "合法首发国策",
+        "详情",
+        None,
+        None,
+        "active",
+        0.0,
+        0.0,
+    )
+    .unwrap();
+
+    let sub = Repository::create_sub_focus(&conn, &life.id, &valid_focus.id, "正常子项", None).unwrap();
+    let invalid_sub_res = Repository::update_sub_focus_status(&conn, &life.id, &sub.id, "illegal_sub_status");
+    assert!(invalid_sub_res.is_err(), "未定义子项状态必须在入库前拒绝");
+
+    // 4. 更新/删除不存在的实体影响行检验 (必须报错 QueryReturnedNoRows，不应静默通过)
+    let non_existent_focus_update = Repository::update_focus_status(&mut conn, &life.id, "ghost-id", "completed", None, None, None);
+    assert!(non_existent_focus_update.is_err());
+
+    let non_existent_trait_delete = Repository::delete_trait(&mut conn, &life.id, "ghost-trait-id");
+    assert!(non_existent_trait_delete.is_err());
+
+    let non_existent_sub_delete = Repository::delete_sub_focus(&conn, &life.id, "ghost-sub-id");
+    assert!(non_existent_sub_delete.is_err());
 }
 
 

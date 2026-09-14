@@ -128,6 +128,19 @@ pub enum FocusStatus {
     Revoked,
 }
 
+impl std::str::FromStr for FocusStatus {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "active" => Ok(FocusStatus::Active),
+            "completed" => Ok(FocusStatus::Completed),
+            "paused" => Ok(FocusStatus::Paused),
+            "revoked" => Ok(FocusStatus::Revoked),
+            _ => Err(format!("未知的国策状态: '{s}', 允许值为 active, completed, paused, revoked")),
+        }
+    }
+}
+
 impl FocusStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -137,14 +150,102 @@ impl FocusStatus {
             FocusStatus::Revoked => "revoked",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Option<Self> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FocusRelationType {
+    Prerequisite,
+    MutuallyExclusive,
+}
+
+impl std::str::FromStr for FocusRelationType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "active" => Some(FocusStatus::Active),
-            "completed" => Some(FocusStatus::Completed),
-            "paused" => Some(FocusStatus::Paused),
-            "revoked" => Some(FocusStatus::Revoked),
-            _ => None,
+            "prerequisite" => Ok(FocusRelationType::Prerequisite),
+            "mutually_exclusive" => Ok(FocusRelationType::MutuallyExclusive),
+            _ => Err(format!("未知的国策关系类型: '{s}', 允许值为 prerequisite, mutually_exclusive")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TraitEquipState {
+    Active,
+    Benched,
+    Unequipped,
+}
+
+impl std::str::FromStr for TraitEquipState {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "active" => Ok(TraitEquipState::Active),
+            "benched" => Ok(TraitEquipState::Benched),
+            "unequipped" => Ok(TraitEquipState::Unequipped),
+            _ => Err(format!("未知的特质装备状态: '{s}', 允许值为 active, benched, unequipped")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubFocusStatus {
+    Todo,
+    InProgress,
+    Done,
+    Canceled,
+}
+
+impl std::str::FromStr for SubFocusStatus {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "todo" => Ok(SubFocusStatus::Todo),
+            "in_progress" => Ok(SubFocusStatus::InProgress),
+            "done" => Ok(SubFocusStatus::Done),
+            "canceled" => Ok(SubFocusStatus::Canceled),
+            _ => Err(format!("未知的子国策状态: '{s}', 允许值为 todo, in_progress, done, canceled")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EventKind {
+    Normal,
+    Super,
+}
+
+impl std::str::FromStr for EventKind {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "normal" => Ok(EventKind::Normal),
+            "super" => Ok(EventKind::Super),
+            _ => Err(format!("未知的事件类型: '{s}', 允许值为 normal, super")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StaffMeetingStatus {
+    InProgress,
+    Completed,
+    Aborted,
+}
+
+impl std::str::FromStr for StaffMeetingStatus {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "in_progress" => Ok(StaffMeetingStatus::InProgress),
+            "completed" => Ok(StaffMeetingStatus::Completed),
+            "aborted" => Ok(StaffMeetingStatus::Aborted),
+            _ => Err(format!("未知的参谋会议状态: '{s}', 允许值为 in_progress, completed, aborted")),
         }
     }
 }

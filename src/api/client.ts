@@ -304,9 +304,9 @@ const mockData: {
     { id: 'rel-7', life_id: 'mock-life-1', source_focus_id: 'focus-5', target_focus_id: 'focus-8', relation_type: 'prerequisite' },
   ],
   traits: [
-    { id: 'trait-1', life_id: 'mock-life-1', title: '本质思考 1阶', body_md: '第一性原理拆解核心逻辑，专注归纳本质公理', icon: undefined, archived_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: 'trait-2', life_id: 'mock-life-1', title: '反脆弱进化 2阶', body_md: '在波动与挫败中沉淀经验，持续构建第二曲线', icon: 'active', archived_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: 'trait-3', life_id: 'mock-life-1', title: '终局洞察推演 3阶', body_md: '以未来终局视角审视当下决断，保持战略定力', icon: undefined, archived_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 'trait-1', life_id: 'mock-life-1', title: '本质思考 1阶', body_md: '第一性原理拆解核心逻辑，专注归纳本质公理', icon: undefined, equip_state: 'unequipped', archived_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 'trait-2', life_id: 'mock-life-1', title: '反脆弱进化 2阶', body_md: '在波动与挫败中沉淀经验，持续构建第二曲线', icon: undefined, equip_state: 'active', archived_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 'trait-3', life_id: 'mock-life-1', title: '终局洞察推演 3阶', body_md: '以未来终局视角审视当下决断，保持战略定力', icon: undefined, equip_state: 'unequipped', archived_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
   ],
   traitRelations: [
     { id: 't-rel-1', life_id: 'mock-life-1', predecessor_id: 'trait-1', successor_id: 'trait-2', note: '心智阶梯进阶', occurred_at: new Date().toISOString() },
@@ -373,15 +373,16 @@ export function resolveActiveEquippedTraits(traits: Trait[], relations: TraitRel
 
     if (component.length === 1) {
       const single = component[0];
-      if (single.icon !== 'benched') {
+      const isBenched = single.equip_state === 'benched' || (!single.equip_state && single.icon === 'benched');
+      if (!isBenched) {
         activeTraits.push(single);
       }
     } else {
-      const active = component.find((item) => item.icon === 'active');
+      const active = component.find((item) => item.equip_state === 'active' || (!item.equip_state && item.icon === 'active'));
       if (active) {
         activeTraits.push(active);
       } else {
-        const isBenched = component.some((item) => item.icon === 'benched');
+        const isBenched = component.some((item) => item.equip_state === 'benched' || (!item.equip_state && item.icon === 'benched'));
         if (!isBenched) {
           const succSet = new Set(relations.map((r) => r.successor_id));
           const root = component.find((item) => !succSet.has(item.id)) || component[0];
@@ -593,6 +594,7 @@ function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
       title: args?.title as string,
       body_md: (args?.bodyMd as string) || '',
       icon: args?.icon as string | undefined,
+      equip_state: 'unequipped',
       archived_at: null,
       created_at: now,
       updated_at: now,
@@ -629,7 +631,7 @@ function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
     for (const tid of groupTraitIds) {
       const t = mockData.traits.find((item) => item.id === tid);
       if (t) {
-        t.icon = t.id === activeId ? 'active' : undefined;
+        t.equip_state = t.id === activeId ? 'active' : 'unequipped';
         t.updated_at = now;
       }
     }
@@ -643,9 +645,9 @@ function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
       const t = mockData.traits.find((item) => item.id === tid);
       if (t) {
         if (!equip) {
-          t.icon = 'benched';
+          t.equip_state = 'benched';
         } else {
-          t.icon = t.id === targetActiveId ? 'active' : undefined;
+          t.equip_state = t.id === targetActiveId ? 'active' : 'unequipped';
         }
         t.updated_at = now;
       }
