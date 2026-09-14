@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Trait, TraitRelation } from '../../api/types';
 import { api } from '../../api/client';
+import { isTraitActive, isTraitBenched, hasDirectedPath } from '../../domain/traits';
 import { useToast } from '../../components/ToastProvider';
 import {
   User,
@@ -114,31 +115,6 @@ function renderLeaderAvatar(avatarUri?: string, name?: string) {
   return <img src={avatarUri} alt={name || '领袖'} className="w-full h-full object-cover" />;
 }
 
-/**
- * 拓扑环检测：检测有向图中是否存在从 fromId 到 toId 的有向路径
- */
-function hasDirectedPath(
-  relations: TraitRelation[],
-  fromId: string,
-  toId: string,
-  visited = new Set<string>()
-): boolean {
-  if (fromId === toId) return true;
-  if (visited.has(fromId)) return false;
-  const nextVisited = new Set(visited);
-  nextVisited.add(fromId);
-
-  const directSuccessors = relations
-    .filter((r) => r.predecessor_id === fromId)
-    .map((r) => r.successor_id);
-
-  for (const succ of directSuccessors) {
-    if (hasDirectedPath(relations, succ, toId, nextVisited)) {
-      return true;
-    }
-  }
-  return false;
-}
 
 interface LeaderViewProps {
   lifeId: string;
@@ -506,7 +482,7 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
 
   const handleToggleEquipGroup = async (group: { id: string; subTraits: Trait[] }, equip: boolean, targetStageId?: string) => {
     const groupTraitIds = group.subTraits.map((t) => t.id);
-    const targetId = targetStageId || group.subTraits.find((t) => t.equip_state === 'active' || t.icon === 'active')?.id || group.subTraits[0]?.id;
+    const targetId = targetStageId || group.subTraits.find((t) => isTraitActive(t))?.id || group.subTraits[0]?.id;
     try {
       if (equip) {
         soundFx.playMedalEquip();
@@ -702,8 +678,8 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
     let equipped = 0;
     let benched = 0;
     for (const group of masterGroups) {
-      const hasActive = group.subTraits.some((t) => t.icon === 'active');
-      const hasBenched = group.subTraits.some((t) => t.icon === 'benched');
+      const hasActive = group.subTraits.some((t) => isTraitActive(t));
+      const hasBenched = group.subTraits.some((t) => isTraitBenched(t));
       if (hasActive) {
         equipped++;
       } else if (hasBenched) {
@@ -1010,8 +986,8 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {masterGroups.map((group) => {
                   const subCount = group.subTraits.length;
-                  const activeSubIndex = group.subTraits.findIndex((s) => s.icon === 'active');
-                  const isBenched = group.subTraits.some((s) => s.icon === 'benched');
+                  const activeSubIndex = group.subTraits.findIndex((s) => isTraitActive(s));
+                  const isBenched = group.subTraits.some((s) => isTraitBenched(s));
                   const isEquipped = activeSubIndex >= 0 || (!isBenched && group.subTraits.length > 0);
                   const currentActiveIdx = activeSubIndex >= 0 ? activeSubIndex : 0;
                   const activeTrait = group.subTraits[currentActiveIdx] || group.subTraits[0];
@@ -1766,8 +1742,8 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
 
             {/* Header */}
             {(() => {
-              const modalHasActive = selectedMasterGroup.subTraits.some((s) => s.icon === 'active');
-              const modalHasBenched = selectedMasterGroup.subTraits.some((s) => s.icon === 'benched');
+              const modalHasActive = selectedMasterGroup.subTraits.some((s) => isTraitActive(s));
+              const modalHasBenched = selectedMasterGroup.subTraits.some((s) => isTraitBenched(s));
               const modalIsEquipped = modalHasActive || (!modalHasBenched && selectedMasterGroup.subTraits.length > 0);
               return (
                 <div className="flex items-center justify-between px-6 py-4 border-b border-[#334237] bg-gradient-to-r from-[#19221b] via-[#1c271f] to-[#141c16]">
@@ -1828,10 +1804,10 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               <div className="relative border-l-2 border-[#967b36]/60 ml-4 pl-6 space-y-6">
                 {selectedMasterGroup.subTraits.map((sub, idx) => {
-                  const modalHasActive = selectedMasterGroup.subTraits.some((s) => s.icon === 'active');
-                  const modalHasBenched = selectedMasterGroup.subTraits.some((s) => s.icon === 'benched');
+                  const modalHasActive = selectedMasterGroup.subTraits.some((s) => isTraitActive(s));
+                  const modalHasBenched = selectedMasterGroup.subTraits.some((s) => isTraitBenched(s));
                   const modalIsEquipped = modalHasActive || (!modalHasBenched && selectedMasterGroup.subTraits.length > 0);
-                  const activeSubIndex = selectedMasterGroup.subTraits.findIndex((s) => s.icon === 'active');
+                  const activeSubIndex = selectedMasterGroup.subTraits.findIndex((s) => isTraitActive(s));
                   const currentActiveIdx = activeSubIndex >= 0 ? activeSubIndex : 0;
                   const isActive = idx === currentActiveIdx;
                   const isPast = idx < currentActiveIdx;

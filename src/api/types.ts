@@ -235,3 +235,10 @@ export interface LLMProviderConfig {
   model: string;
 }
 
+export interface AppError {
+  code?: string;
+  message: string;
+  details?: string;
+}
+
+
