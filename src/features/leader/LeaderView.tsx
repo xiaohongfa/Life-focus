@@ -254,8 +254,9 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
         setAiCmdOpen(false);
         setTraitProposalsOpen(true);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to run AI in LeaderView:', err);
+      toast.error(`AI 推演失败: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsGeneratingAi(false);
     }
@@ -266,8 +267,9 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
     setLeaderProposalOpen(false);
     try {
       await api.updateLeader(lifeId, leaderName, finalText, leaderAvatar);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to save leader proposal', err);
+      toast.error(`采纳统帅档案失败: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -288,8 +290,9 @@ export const LeaderView: React.FC<LeaderViewProps> = ({ lifeId }) => {
       }
       setTraitProposalsOpen(false);
       await loadData();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to accept trait proposals', err);
+      toast.error(`采纳特质提案失败: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 

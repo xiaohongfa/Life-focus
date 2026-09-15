@@ -75,4 +75,75 @@ describe('Browser Mock Contract & Operations', () => {
     expect(feed.some((item) => item.item_type === 'super_event' && item.title === '历史大转折')).toBe(true);
     expect(feed.some((item) => item.item_type === 'essay' && item.title.includes('新年寄语'))).toBe(true);
   });
+
+  it('rejects invalid enum values and cross-life relations like the backend', () => {
+    const lifeA = mockHandler<Life>('create_life', { name: 'Mock隔离A' });
+    const lifeB = mockHandler<Life>('create_life', { name: 'Mock隔离B' });
+    const focusA = mockHandler<{ id: string }>('create_focus', {
+      lifeId: lifeA.id,
+      title: 'A',
+      status: 'active',
+      positionX: 0,
+      positionY: 0,
+    });
+    const focusB = mockHandler<{ id: string }>('create_focus', {
+      lifeId: lifeB.id,
+      title: 'B',
+      status: 'active',
+      positionX: 0,
+      positionY: 0,
+    });
+
+    expect(() => mockHandler('create_focus', {
+      lifeId: lifeA.id,
+      title: '非法状态',
+      status: 'not-a-status',
+      positionX: 0,
+      positionY: 0,
+    })).toThrow();
+    expect(() => mockHandler('add_focus_relation', {
+      lifeId: lifeA.id,
+      sourceId: focusA.id,
+      targetId: focusB.id,
+      relationType: 'prerequisite',
+    })).toThrow();
+  });
+
+  it('prevents mock prerequisite cycles and normalizes mutual exclusions', () => {
+    const life = mockHandler<Life>('create_life', { name: 'Mock图约束' });
+    const createFocus = (title: string) => mockHandler<{ id: string }>('create_focus', {
+      lifeId: life.id,
+      title,
+      status: 'active',
+      positionX: 0,
+      positionY: 0,
+    });
+    const a = createFocus('A');
+    const b = createFocus('B');
+    const c = createFocus('C');
+
+    mockHandler('add_focus_relation', { lifeId: life.id, sourceId: a.id, targetId: b.id, relationType: 'prerequisite' });
+    mockHandler('add_focus_relation', { lifeId: life.id, sourceId: b.id, targetId: c.id, relationType: 'prerequisite' });
+    expect(() => mockHandler('add_focus_relation', {
+      lifeId: life.id,
+      sourceId: c.id,
+      targetId: a.id,
+      relationType: 'prerequisite',
+    })).toThrow();
+
+    const first = mockHandler<{ id: string; source_focus_id: string; target_focus_id: string }>('add_focus_relation', {
+      lifeId: life.id,
+      sourceId: a.id,
+      targetId: c.id,
+      relationType: 'mutually_exclusive',
+    });
+    const duplicate = mockHandler<{ id: string }>('add_focus_relation', {
+      lifeId: life.id,
+      sourceId: c.id,
+      targetId: a.id,
+      relationType: 'mutually_exclusive',
+    });
+    expect(duplicate.id).toBe(first.id);
+    expect(first.source_focus_id < first.target_focus_id).toBe(true);
+  });
 });

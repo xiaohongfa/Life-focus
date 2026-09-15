@@ -12,7 +12,7 @@
 - 📋 **指挥官档案与心智特质体系**：包含战略人事档案、特质负载分配与国家精神 Buff 体系。
 - ⚡ **即时心智稳定度监控**：实时心智稳定度动态调节，复盘历史战略调令。
 - 🔕 **离线 Web Audio 物理音效**：沉浸式机械开关咬合与战略决议盖章音效。
-- 🔒 **纯本地隐私与跨平台运行**：基于 Tauri 2.0 + SQLite，全部数据本地持久化存储，无需任何联网账号。
+- 🔒 **本地优先与跨平台运行**：基于 Tauri 2.0 + SQLite，全部个人数据本地持久化存储，无需联网账号；仅在你主动配置并使用 AI 功能时，才会向所选模型服务发送请求。
 
 ---
 
@@ -21,7 +21,7 @@
 - **前端技术**：React 19 + TypeScript + Vite + Tailwind CSS
 - **可视化图谱**：@xyflow/react (React Flow)
 - **桌面端运行时**：Tauri v2 + Rust
-- **本地存储**：SQLite (tauri-plugin-sql)
+- **本地存储**：SQLite（Rust `rusqlite`）
 - **图标与音效**：Lucide React + Web Audio API
 
 ---

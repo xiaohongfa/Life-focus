@@ -21,7 +21,8 @@ import type {
   StaffMember,
   StaffMeeting,
 } from './types';
-import { resolveActiveEquippedTraits } from '../domain/traits';
+import { hasDirectedPath, resolveActiveEquippedTraits } from '../domain/traits';
+import { hasDirectedFocusPath, normalizeMutualFocusEndpoints } from '../domain/focus';
 
 export interface MockStore {
   lives: Life[];
@@ -46,6 +47,34 @@ export interface MockStore {
 
 const DEFAULT_LIFE_ID = 'mock-life-1';
 const now = new Date().toISOString();
+let mockIdSequence = 0;
+
+function nextMockId(prefix: string): string {
+  mockIdSequence += 1;
+  return `${prefix}-${Date.now()}-${mockIdSequence}`;
+}
+
+function requireLife(lifeId: string): Life {
+  const life = mockData.lives.find((item) => item.id === lifeId);
+  if (!life) throw new Error('人生世界不存在');
+  return life;
+}
+
+function requireOwned<T extends { id: string; life_id: string }>(
+  items: T[],
+  id: string,
+  lifeId: string,
+  label: string
+): T {
+  const item = items.find((candidate) => candidate.id === id && candidate.life_id === lifeId);
+  if (!item) throw new Error(`${label}不存在或不属于当前人生世界`);
+  return item;
+}
+
+function requireEnum(value: string, allowed: readonly string[], label: string): string {
+  if (!allowed.includes(value)) throw new Error(`${label}无效，可选值：${allowed.join(', ')}`);
+  return value;
+}
 
 export const mockData: MockStore = {
   lives: [{ id: DEFAULT_LIFE_ID, name: '第一人生', created_at: now, updated_at: now }],
@@ -169,7 +198,7 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'create_life') {
-    const lifeId = `life-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const lifeId = nextMockId('life');
     const name = (args?.name as string) || '新人生';
     const newLife: Life = {
       id: lifeId,
@@ -221,10 +250,7 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   if (cmd === 'rename_life') {
     const lifeId = args?.lifeId as string;
     const name = args?.name as string;
-    const life = mockData.lives.find((l) => l.id === lifeId);
-    if (!life) {
-      throw new Error('人生世界不存在');
-    }
+    const life = requireLife(lifeId);
     life.name = name;
     life.updated_at = currentTimestamp;
     return undefined as unknown as T;
@@ -232,10 +258,7 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
 
   if (cmd === 'delete_life') {
     const lifeId = args?.lifeId as string;
-    const exists = mockData.lives.some((l) => l.id === lifeId);
-    if (!exists) {
-      throw new Error('人生世界不存在');
-    }
+    requireLife(lifeId);
     // 级联清理所有归属于该 lifeId 的数据
     mockData.lives = mockData.lives.filter((l) => l.id !== lifeId);
     mockData.foci = mockData.foci.filter((f) => f.life_id !== lifeId);
@@ -259,11 +282,8 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'get_world_overview') {
-    const lifeId = (args?.lifeId as string) || mockData.lives[0]?.id;
-    const life = mockData.lives.find((l) => l.id === lifeId);
-    if (!life) {
-      return null as unknown as T;
-    }
+    const lifeId = args?.lifeId as string;
+    const life = requireLife(lifeId);
     const stab = mockData.stability[lifeId]?.current ?? null;
     const leader = mockData.leaders[lifeId] || {
       id: `leader-${lifeId}`,
@@ -308,7 +328,8 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
 
   // ==================== STABILITY ====================
   if (cmd === 'get_stability') {
-    const lifeId = (args?.lifeId as string) || DEFAULT_LIFE_ID;
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
     return {
       life_id: lifeId,
       current_value: mockData.stability[lifeId]?.current ?? null,
@@ -319,13 +340,15 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   if (cmd === 'set_stability') {
     const lifeId = (args?.lifeId as string) || DEFAULT_LIFE_ID;
     const val = args?.newValue as number;
+    requireLife(lifeId);
+    if (!Number.isFinite(val)) throw new Error('稳定度必须是有效数字');
     if (!mockData.stability[lifeId]) {
       mockData.stability[lifeId] = { current: null, history: [] };
     }
     const prev = mockData.stability[lifeId].current;
     mockData.stability[lifeId].current = val;
     const change: StabilityChange = {
-      id: `sc-${Date.now()}`,
+      id: nextMockId('sc'),
       life_id: lifeId,
       before_value: prev,
       after_value: val,
@@ -341,7 +364,8 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'get_stability_history') {
-    const lifeId = (args?.lifeId as string) || DEFAULT_LIFE_ID;
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
     const limit = (args?.limit as number) || 50;
     const history = mockData.stability[lifeId]?.history || [];
     return history.slice(0, limit) as T;
@@ -359,14 +383,17 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'create_focus') {
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
+    const status = requireEnum((args?.status as string) || 'active', ['active', 'completed', 'paused', 'revoked'], '国策状态') as FocusStatus;
     const f: Focus = {
-      id: `focus-${Date.now()}`,
-      life_id: args?.lifeId as string,
+      id: nextMockId('focus'),
+      life_id: lifeId,
       title: args?.title as string,
       body_md: (args?.bodyMd as string) || '',
       icon: args?.icon as string | undefined,
       image_attachment_id: args?.imageAttachmentId as string | undefined,
-      status: (args?.status as FocusStatus) || 'active',
+      status,
       position_x: (args?.positionX as number) || 0,
       position_y: (args?.positionY as number) || 0,
       created_at: currentTimestamp,
@@ -378,27 +405,25 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
 
   if (cmd === 'update_focus_position') {
     const focusId = args?.focusId as string;
-    const f = mockData.foci.find((item) => item.id === focusId);
-    if (f) {
-      f.position_x = args?.positionX as number;
-      f.position_y = args?.positionY as number;
-      f.updated_at = currentTimestamp;
-    }
+    const f = requireOwned(mockData.foci, focusId, args?.lifeId as string, '国策');
+    f.position_x = args?.positionX as number;
+    f.position_y = args?.positionY as number;
+    f.updated_at = currentTimestamp;
     return undefined as unknown as T;
   }
 
   if (cmd === 'update_focus_status') {
     const focusId = args?.focusId as string;
-    const newStatus = args?.newStatus as FocusStatus;
-    const f = mockData.foci.find((item) => item.id === focusId);
-    if (f) {
+    const newStatus = requireEnum(args?.newStatus as string, ['active', 'completed', 'paused', 'revoked'], '国策状态') as FocusStatus;
+    const f = requireOwned(mockData.foci, focusId, args?.lifeId as string, '国策');
+    {
       const oldStatus = f.status;
       f.status = newStatus;
       f.updated_at = currentTimestamp;
 
       // 记录流转历史
       mockData.focusHistory.unshift({
-        id: `fsh-${Date.now()}`,
+        id: nextMockId('fsh'),
         life_id: f.life_id,
         focus_id: focusId,
         from_status: oldStatus,
@@ -415,19 +440,18 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
 
   if (cmd === 'update_focus_content') {
     const focusId = args?.focusId as string;
-    const f = mockData.foci.find((item) => item.id === focusId);
-    if (f) {
-      f.title = (args?.title as string) || f.title;
-      f.body_md = (args?.bodyMd as string) ?? f.body_md;
-      f.icon = args?.icon as string | undefined;
-      f.image_attachment_id = args?.imageAttachmentId as string | undefined;
-      f.updated_at = currentTimestamp;
-    }
+    const f = requireOwned(mockData.foci, focusId, args?.lifeId as string, '国策');
+    f.title = (args?.title as string) || f.title;
+    f.body_md = (args?.bodyMd as string) ?? f.body_md;
+    f.icon = args?.icon as string | undefined;
+    f.image_attachment_id = args?.imageAttachmentId as string | undefined;
+    f.updated_at = currentTimestamp;
     return undefined as unknown as T;
   }
 
   if (cmd === 'delete_focus') {
     const focusId = args?.focusId as string;
+    requireOwned(mockData.foci, focusId, args?.lifeId as string, '国策');
     mockData.foci = mockData.foci.filter((item) => item.id !== focusId);
     mockData.relations = mockData.relations.filter(
       (r) => r.source_focus_id !== focusId && r.target_focus_id !== focusId
@@ -437,12 +461,31 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'add_focus_relation') {
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
+    const sourceId = args?.sourceId as string;
+    const targetId = args?.targetId as string;
+    if (sourceId === targetId) throw new Error('国策关系不能连接自身');
+    requireOwned(mockData.foci, sourceId, lifeId, '源国策');
+    requireOwned(mockData.foci, targetId, lifeId, '目标国策');
+    const relationType = requireEnum(args?.relationType as string, ['prerequisite', 'mutually_exclusive'], '国策关系类型') as FocusRelation['relation_type'];
+    const normalized = relationType === 'mutually_exclusive'
+      ? normalizeMutualFocusEndpoints(sourceId, targetId)
+      : { sourceId, targetId };
+    if (relationType === 'prerequisite' && hasDirectedFocusPath(mockData.relations, targetId, sourceId)) {
+      throw new Error('国策前置关系会形成循环依赖');
+    }
+    const duplicate = mockData.relations.find(
+      (r) => r.life_id === lifeId && r.source_focus_id === normalized.sourceId &&
+        r.target_focus_id === normalized.targetId && r.relation_type === relationType
+    );
+    if (duplicate) return duplicate as T;
     const rel: FocusRelation = {
-      id: `rel-${Date.now()}`,
-      life_id: args?.lifeId as string,
-      source_focus_id: args?.sourceId as string,
-      target_focus_id: args?.targetId as string,
-      relation_type: (args?.relationType as 'prerequisite' | 'mutually_exclusive') || 'prerequisite',
+      id: nextMockId('rel'),
+      life_id: lifeId,
+      source_focus_id: normalized.sourceId,
+      target_focus_id: normalized.targetId,
+      relation_type: relationType,
       note: args?.note as string | undefined,
     };
     mockData.relations.push(rel);
@@ -451,6 +494,7 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
 
   if (cmd === 'delete_focus_relation') {
     const relationId = args?.relationId as string;
+    requireOwned(mockData.relations, relationId, args?.lifeId as string, '国策关系');
     mockData.relations = mockData.relations.filter((r) => r.id !== relationId);
     return undefined as unknown as T;
   }
@@ -481,7 +525,8 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'update_leader') {
-    const lifeId = (args?.lifeId as string) || mockData.lives[0]?.id;
+    const lifeId = (args?.lifeId as string) || mockData.lives[0]?.id || DEFAULT_LIFE_ID;
+    requireLife(lifeId);
     if (!mockData.leaders[lifeId]) {
       mockData.leaders[lifeId] = {
         id: `leader-${lifeId}`,
@@ -516,7 +561,8 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'update_situation') {
-    const lifeId = (args?.lifeId as string) || mockData.lives[0]?.id;
+    const lifeId = (args?.lifeId as string) || mockData.lives[0]?.id || DEFAULT_LIFE_ID;
+    requireLife(lifeId);
     if (!mockData.situations[lifeId]) {
       mockData.situations[lifeId] = {
         id: `situation-${lifeId}`,
@@ -547,7 +593,8 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'update_philosophy') {
-    const lifeId = (args?.lifeId as string) || mockData.lives[0]?.id;
+    const lifeId = (args?.lifeId as string) || mockData.lives[0]?.id || DEFAULT_LIFE_ID;
+    requireLife(lifeId);
     if (!mockData.philosophies[lifeId]) {
       mockData.philosophies[lifeId] = {
         id: `philosophy-${lifeId}`,
@@ -573,9 +620,11 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'create_trait') {
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
     const t: Trait = {
-      id: `trait-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      life_id: args?.lifeId as string,
+      id: nextMockId('trait'),
+      life_id: lifeId,
       title: args?.title as string,
       body_md: (args?.bodyMd as string) || '',
       icon: args?.icon as string | undefined,
@@ -589,14 +638,13 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'archive_trait') {
-    const trait = mockData.traits.find((t) => t.id === args?.traitId);
-    if (trait) {
-      trait.archived_at = (args?.archive as boolean) ? currentTimestamp : null;
-    }
+    const trait = requireOwned(mockData.traits, args?.traitId as string, args?.lifeId as string, '特质');
+    trait.archived_at = (args?.archive as boolean) ? currentTimestamp : null;
     return undefined as unknown as T;
   }
 
   if (cmd === 'delete_trait') {
+    requireOwned(mockData.traits, args?.traitId as string, args?.lifeId as string, '特质');
     mockData.traits = mockData.traits.filter((t) => t.id !== args?.traitId);
     mockData.traitRelations = mockData.traitRelations.filter(
       (r) => r.predecessor_id !== args?.traitId && r.successor_id !== args?.traitId
@@ -605,20 +653,21 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'update_trait') {
-    const trait = mockData.traits.find((t) => t.id === args?.id);
-    if (trait) {
-      trait.title = (args?.title as string) || trait.title;
-      trait.body_md = (args?.bodyMd as string) ?? trait.body_md;
-      trait.icon = args?.icon as string | undefined;
-      trait.updated_at = currentTimestamp;
-      return trait as T;
-    }
-    throw new Error('Trait not found');
+    const trait = requireOwned(mockData.traits, args?.id as string, args?.lifeId as string, '特质');
+    trait.title = (args?.title as string) || trait.title;
+    trait.body_md = (args?.bodyMd as string) ?? trait.body_md;
+    trait.icon = args?.icon as string | undefined;
+    trait.updated_at = currentTimestamp;
+    return trait as T;
   }
 
   if (cmd === 'set_active_trait_stage') {
+    const lifeId = args?.lifeId as string;
     const groupTraitIds = (args?.groupTraitIds as string[]) || [];
     const activeId = args?.activeTraitId as string;
+    requireLife(lifeId);
+    if (!groupTraitIds.includes(activeId)) throw new Error('激活特质必须属于当前特质阶梯');
+    groupTraitIds.forEach((id) => requireOwned(mockData.traits, id, lifeId, '特质'));
     for (const tid of groupTraitIds) {
       const t = mockData.traits.find((item) => item.id === tid);
       if (t) {
@@ -630,9 +679,13 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'set_trait_equipped') {
+    const lifeId = args?.lifeId as string;
     const traitIds = (args?.traitIds as string[]) || [];
     const equip = args?.equip as boolean;
     const targetActiveId = (args?.targetActiveId as string) || traitIds[0];
+    requireLife(lifeId);
+    traitIds.forEach((id) => requireOwned(mockData.traits, id, lifeId, '特质'));
+    if (equip && !traitIds.includes(targetActiveId)) throw new Error('激活特质必须属于当前特质组');
     for (const tid of traitIds) {
       const t = mockData.traits.find((item) => item.id === tid);
       if (t) {
@@ -653,11 +706,26 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'add_trait_relation') {
+    const lifeId = args?.lifeId as string;
+    const predecessorId = args?.predecessorId as string;
+    const successorId = args?.successorId as string;
+    requireLife(lifeId);
+    if (predecessorId === successorId) throw new Error('特质关系不能连接自身');
+    requireOwned(mockData.traits, predecessorId, lifeId, '前置特质');
+    requireOwned(mockData.traits, successorId, lifeId, '后继特质');
+    const duplicate = mockData.traitRelations.find(
+      (relation) => relation.life_id === lifeId && relation.predecessor_id === predecessorId && relation.successor_id === successorId
+    );
+    if (duplicate) return duplicate as T;
+    const lifeRelations = mockData.traitRelations.filter((relation) => relation.life_id === lifeId);
+    if (hasDirectedPath(lifeRelations, successorId, predecessorId)) {
+      throw new Error('特质关系不能形成循环依赖');
+    }
     const rel: TraitRelation = {
-      id: `trel-${Date.now()}`,
-      life_id: args?.lifeId as string,
-      predecessor_id: args?.predecessorId as string,
-      successor_id: args?.successorId as string,
+      id: nextMockId('trel'),
+      life_id: lifeId,
+      predecessor_id: predecessorId,
+      successor_id: successorId,
       occurred_at: currentTimestamp,
       note: args?.note as string | undefined,
     };
@@ -669,6 +737,7 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
     const relationId = args?.relationId as string | undefined;
     const predId = args?.predecessorId as string | undefined;
     const succId = args?.successorId as string | undefined;
+    if (relationId) requireOwned(mockData.traitRelations, relationId, args?.lifeId as string, '特质关系');
     mockData.traitRelations = mockData.traitRelations.filter((r) => {
       if (relationId && r.id === relationId) return false;
       if (predId && succId && r.predecessor_id === predId && r.successor_id === succId) return false;
@@ -685,9 +754,11 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'create_ideology') {
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
     const ideo: Ideology = {
-      id: `ideo-${Date.now()}`,
-      life_id: args?.lifeId as string,
+      id: nextMockId('ideo'),
+      life_id: lifeId,
       title: args?.title as string,
       body_md: (args?.bodyMd as string) || '',
       icon: args?.icon as string | undefined,
@@ -701,24 +772,22 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'update_ideology') {
-    const ideo = mockData.ideologies.find((i) => i.id === args?.id);
-    if (ideo) {
-      ideo.title = (args?.title as string) || ideo.title;
-      ideo.body_md = (args?.bodyMd as string) ?? ideo.body_md;
-      ideo.icon = args?.icon as string | undefined;
-      ideo.updated_at = currentTimestamp;
-      return ideo as T;
-    }
-    throw new Error('Ideology not found');
+    const ideo = requireOwned(mockData.ideologies, args?.id as string, args?.lifeId as string, '意识形态');
+    ideo.title = (args?.title as string) || ideo.title;
+    ideo.body_md = (args?.bodyMd as string) ?? ideo.body_md;
+    ideo.icon = args?.icon as string | undefined;
+    ideo.updated_at = currentTimestamp;
+    return ideo as T;
   }
 
   if (cmd === 'archive_ideology') {
-    const ideo = mockData.ideologies.find((i) => i.id === args?.ideologyId);
-    if (ideo) ideo.archived_at = (args?.archive as boolean) ? currentTimestamp : null;
+    const ideo = requireOwned(mockData.ideologies, args?.ideologyId as string, args?.lifeId as string, '意识形态');
+    ideo.archived_at = (args?.archive as boolean) ? currentTimestamp : null;
     return undefined as unknown as T;
   }
 
   if (cmd === 'delete_ideology') {
+    requireOwned(mockData.ideologies, args?.id as string, args?.lifeId as string, '意识形态');
     mockData.ideologies = mockData.ideologies.filter((i) => i.id !== args?.id);
     return undefined as unknown as T;
   }
@@ -730,9 +799,11 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'create_national_spirit') {
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
     const spirit: NationalSpirit = {
-      id: `spirit-${Date.now()}`,
-      life_id: args?.lifeId as string,
+      id: nextMockId('spirit'),
+      life_id: lifeId,
       title: args?.title as string,
       body_md: (args?.bodyMd as string) || '',
       icon: args?.icon as string | undefined,
@@ -745,24 +816,22 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'update_national_spirit') {
-    const spirit = mockData.spirits.find((s) => s.id === args?.id);
-    if (spirit) {
-      spirit.title = (args?.title as string) || spirit.title;
-      spirit.body_md = (args?.bodyMd as string) ?? spirit.body_md;
-      spirit.icon = args?.icon as string | undefined;
-      spirit.updated_at = currentTimestamp;
-      return spirit as T;
-    }
-    throw new Error('National spirit not found');
+    const spirit = requireOwned(mockData.spirits, args?.id as string, args?.lifeId as string, '国家精神');
+    spirit.title = (args?.title as string) || spirit.title;
+    spirit.body_md = (args?.bodyMd as string) ?? spirit.body_md;
+    spirit.icon = args?.icon as string | undefined;
+    spirit.updated_at = currentTimestamp;
+    return spirit as T;
   }
 
   if (cmd === 'archive_national_spirit') {
-    const spirit = mockData.spirits.find((s) => s.id === args?.spiritId);
-    if (spirit) spirit.archived_at = (args?.archive as boolean) ? currentTimestamp : null;
+    const spirit = requireOwned(mockData.spirits, args?.spiritId as string, args?.lifeId as string, '国家精神');
+    spirit.archived_at = (args?.archive as boolean) ? currentTimestamp : null;
     return undefined as unknown as T;
   }
 
   if (cmd === 'delete_national_spirit') {
+    requireOwned(mockData.spirits, args?.id as string, args?.lifeId as string, '国家精神');
     mockData.spirits = mockData.spirits.filter((s) => s.id !== args?.id);
     return undefined as unknown as T;
   }
@@ -774,16 +843,21 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'create_event') {
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
+    const kind = requireEnum((args?.kind as string) || 'normal', ['normal', 'super'], '事件类型') as Event['kind'];
+    const snapshotId = args?.snapshotId as string | undefined;
+    if (snapshotId) requireOwned(mockData.snapshots, snapshotId, lifeId, '世界快照');
     const ev: Event = {
-      id: `ev-${Date.now()}`,
-      life_id: args?.lifeId as string,
+      id: nextMockId('ev'),
+      life_id: lifeId,
       title: args?.title as string,
       body_md: (args?.bodyMd as string) || '',
-      kind: (args?.kind as 'normal' | 'super') || 'normal',
+      kind,
       occurred_on: (args?.occurredOn as string) || currentTimestamp.split('T')[0],
       quote: args?.quote as string | undefined,
       image_attachment_id: args?.imageAttachmentId as string | undefined,
-      snapshot_id: args?.snapshotId as string | undefined,
+      snapshot_id: snapshotId,
       created_at: currentTimestamp,
       updated_at: currentTimestamp,
     };
@@ -797,9 +871,11 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'create_essay') {
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
     const essay: Essay = {
-      id: `essay-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      life_id: args?.lifeId as string,
+      id: nextMockId('essay'),
+      life_id: lifeId,
       title: args?.title as string,
       body_md: args?.bodyMd as string,
       created_at: currentTimestamp,
@@ -811,18 +887,16 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
 
   if (cmd === 'update_essay') {
     const id = args?.id as string;
-    const essay = mockData.essays.find((e) => e.id === id);
-    if (essay) {
-      essay.title = args?.title as string;
-      essay.body_md = args?.bodyMd as string;
-      essay.updated_at = currentTimestamp;
-      return essay as T;
-    }
-    throw new Error('Essay not found');
+    const essay = requireOwned(mockData.essays, id, args?.lifeId as string, '随笔');
+    essay.title = args?.title as string;
+    essay.body_md = args?.bodyMd as string;
+    essay.updated_at = currentTimestamp;
+    return essay as T;
   }
 
   if (cmd === 'delete_essay') {
     const id = args?.id as string;
+    requireOwned(mockData.essays, id, args?.lifeId as string, '随笔');
     mockData.essays = mockData.essays.filter((e) => e.id !== id);
     return undefined as unknown as T;
   }
@@ -939,9 +1013,11 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'create_world_snapshot') {
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
     const snap: WorldSnapshot = {
-      id: `snap-${Date.now()}`,
-      life_id: args?.lifeId as string,
+      id: nextMockId('snap'),
+      life_id: lifeId,
       name: args?.name as string,
       description: args?.description as string | undefined,
       snapshot_schema_version: 1,
@@ -959,6 +1035,7 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
 
   if (cmd === 'delete_world_snapshot') {
     const snapshotId = args?.snapshotId as string;
+    requireOwned(mockData.snapshots, snapshotId, args?.lifeId as string, '世界快照');
     mockData.snapshots = mockData.snapshots.filter((s) => s.id !== snapshotId);
     return undefined as unknown as T;
   }
@@ -977,9 +1054,12 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'create_sub_focus') {
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
+    requireOwned(mockData.foci, args?.focusId as string, lifeId, '所属国策');
     const sub: FocusSubItem = {
-      id: `sub-${Date.now()}`,
-      life_id: args?.lifeId as string,
+      id: nextMockId('sub'),
+      life_id: lifeId,
       focus_id: args?.focusId as string,
       title: args?.title as string,
       body_md: args?.bodyMd as string | undefined,
@@ -993,15 +1073,14 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'update_sub_focus_status') {
-    const sub = mockData.subFoci.find((s) => s.id === args?.subId);
-    if (sub) {
-      sub.status = args?.status as any;
-      sub.updated_at = currentTimestamp;
-    }
+    const sub = requireOwned(mockData.subFoci, args?.subId as string, args?.lifeId as string, '子国策');
+    sub.status = requireEnum(args?.status as string, ['todo', 'in_progress', 'done', 'canceled'], '子国策状态') as FocusSubItem['status'];
+    sub.updated_at = currentTimestamp;
     return undefined as unknown as T;
   }
 
   if (cmd === 'delete_sub_focus') {
+    requireOwned(mockData.subFoci, args?.subId as string, args?.lifeId as string, '子国策');
     mockData.subFoci = mockData.subFoci.filter((s) => s.id !== args?.subId);
     return undefined as unknown as T;
   }
@@ -1019,9 +1098,11 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'create_staff_member') {
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
     const mem: StaffMember = {
-      id: `staff-${Date.now()}`,
-      life_id: args?.lifeId as string,
+      id: nextMockId('staff'),
+      life_id: lifeId,
       name: args?.name as string,
       role: args?.role as string,
       prompt: args?.prompt as string,
@@ -1036,18 +1117,17 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'update_staff_member') {
-    const mem = mockData.staffMembers.find((m) => m.id === args?.memberId);
-    if (mem) {
-      mem.name = (args?.name as string) || mem.name;
-      mem.role = (args?.role as string) || mem.role;
-      mem.prompt = (args?.prompt as string) || mem.prompt;
-      mem.enabled = Boolean(args?.enabled);
-      mem.updated_at = currentTimestamp;
-    }
+    const mem = requireOwned(mockData.staffMembers, args?.memberId as string, args?.lifeId as string, '参谋席位');
+    mem.name = (args?.name as string) || mem.name;
+    mem.role = (args?.role as string) || mem.role;
+    mem.prompt = (args?.prompt as string) || mem.prompt;
+    mem.enabled = Boolean(args?.enabled);
+    mem.updated_at = currentTimestamp;
     return undefined as unknown as T;
   }
 
   if (cmd === 'delete_staff_member') {
+    requireOwned(mockData.staffMembers, args?.memberId as string, args?.lifeId as string, '参谋席位');
     mockData.staffMembers = mockData.staffMembers.filter((m) => m.id !== args?.memberId);
     return undefined as unknown as T;
   }
@@ -1058,13 +1138,17 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
   }
 
   if (cmd === 'create_staff_meeting') {
+    const lifeId = args?.lifeId as string;
+    requireLife(lifeId);
+    const rounds = Number(args?.rounds);
+    if (!Number.isInteger(rounds) || rounds < 1 || rounds > 20) throw new Error('会议轮数必须是 1 到 20 之间的整数');
     const meeting: StaffMeeting = {
-      id: `meet-${Date.now()}`,
-      life_id: args?.lifeId as string,
+      id: nextMockId('meet'),
+      life_id: lifeId,
       topic: args?.topic as string,
       confirmed_minutes_md: args?.confirmedMinutesMd as string,
       context_module_names: args?.contextModuleNames as string,
-      rounds: args?.rounds as number,
+      rounds,
       status: 'completed',
       created_at: currentTimestamp,
     };
@@ -1120,5 +1204,5 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
     return JSON.stringify(exportData, null, 2) as unknown as T;
   }
 
-  return [] as unknown as T;
+  throw new Error(`浏览器预览不支持接口: ${cmd}`);
 }

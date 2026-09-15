@@ -324,6 +324,7 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
         await api.updateFocusPosition(lifeId, node.id, node.position.x, node.position.y);
       } catch (err) {
         console.error('Failed to persist node position', err);
+        toast.error('保存节点位置失败，已保留当前画布位置，请稍后重试');
       }
     },
     [lifeId]
@@ -336,7 +337,10 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
         if (change.type === 'remove') {
           const rel = relations.find((r) => r.id === change.id);
           if (rel) {
-            api.deleteFocusRelation(lifeId, rel.id).catch(console.error);
+            api.deleteFocusRelation(lifeId, rel.id).catch((err) => {
+              console.error('Failed to delete focus relation', err);
+              toast.error('删除关系失败，请刷新后重试');
+            });
             setRelations((prev) => prev.filter((r) => r.id !== rel.id));
             setUndoStack((prev) => [...prev, { type: 'DELETE_RELATION', relation: rel }]);
           }

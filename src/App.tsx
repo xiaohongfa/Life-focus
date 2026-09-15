@@ -34,6 +34,7 @@ const AppContent: React.FC = () => {
   const [currentLife, setCurrentLife] = useState<Life | null>(null);
   const [stability, setStability] = useState<Stability | null>(null);
   const [overview, setOverview] = useState<WorldOverview | null>(null);
+  const [lifeLoadingId, setLifeLoadingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [showStabilityModal, setShowStabilityModal] = useState<boolean>(false);
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
@@ -51,6 +52,7 @@ const AppContent: React.FC = () => {
   const loadLifeData = useCallback(async (lifeId: string) => {
     currentLifeIdRef.current = lifeId;
     const currentSeq = ++reqSeqRef.current;
+    setLifeLoadingId(lifeId);
     try {
       const [overviewData, stabData, essaysData] = await Promise.all([
         api.getWorldOverview(lifeId),
@@ -64,14 +66,20 @@ const AppContent: React.FC = () => {
       setOverview(overviewData);
       setStability(stabData);
       setEssays(essaysData);
+      return true;
     } catch (err: unknown) {
       if (currentLifeIdRef.current === lifeId && reqSeqRef.current === currentSeq) {
-        console.error('Failed to load life overview', err);
-        const msg = err instanceof Error ? err.message : String(err);
-        toast.error(`加载人生战略数据受阻: ${msg}`);
+        setOverview(null);
+        setStability(null);
+        setEssays([]);
+      }
+      throw err;
+    } finally {
+      if (currentLifeIdRef.current === lifeId && reqSeqRef.current === currentSeq) {
+        setLifeLoadingId(null);
       }
     }
-  }, [toast]);
+  }, []);
 
   // 初始化加载人生空间列表
   const initApp = useCallback(async () => {
@@ -110,8 +118,15 @@ const AppContent: React.FC = () => {
       setOverview(null);
       setStability(null);
       setEssays([]);
+      setShowEssayModal(false);
+      setEditingEssay(null);
+      setShowStabilityModal(false);
+      setShowSettingsModal(false);
       setCurrentLife(target);
-      loadLifeData(target.id);
+      loadLifeData(target.id).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error(`切换人生世界失败: ${msg}`);
+      });
     }
   };
 
@@ -130,6 +145,22 @@ const AppContent: React.FC = () => {
   };
 
   const handleDeleteLife = async (lifeId: string) => {
+    const deletingCurrent = currentLife?.id === lifeId;
+    const previousLife = deletingCurrent ? currentLife : null;
+    if (deletingCurrent) {
+      // 先关闭所有可能继续提交旧 life_id 的界面，并让进行中的请求失效。
+      reqSeqRef.current++;
+      currentLifeIdRef.current = null;
+      setShowEssayModal(false);
+      setEditingEssay(null);
+      setShowStabilityModal(false);
+      setShowSettingsModal(false);
+      setOverview(null);
+      setStability(null);
+      setEssays([]);
+      setLifeLoadingId(null);
+      setCurrentLife(null);
+    }
     try {
       await api.deleteLife(lifeId);
       toast.success('人生世界已注销');
@@ -149,6 +180,10 @@ const AppContent: React.FC = () => {
       console.error('Failed to delete life', err);
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`注销人生世界失败: ${msg}`);
+      if (previousLife) {
+        setCurrentLife(previousLife);
+        loadLifeData(previousLife.id).catch(() => undefined);
+      }
     }
   };
 
@@ -164,6 +199,7 @@ const AppContent: React.FC = () => {
   };
 
   const handleEssaySaved = (saved: Essay) => {
+    if (saved.life_id !== currentLifeIdRef.current) return;
     setEssays((prev) => {
       const idx = prev.findIndex((e) => e.id === saved.id);
       if (idx >= 0) {
@@ -233,6 +269,12 @@ const AppContent: React.FC = () => {
 
       {/* Main Feature Content View with Isolated Error Containment */}
       <main className="flex-1 overflow-hidden relative">
+        {lifeLoadingId === currentLife.id && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#121519]/90 text-strategy-gold space-x-2">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span className="text-xs font-serif tracking-wider">正在切换人生战略档案...</span>
+          </div>
+        )}
         <ErrorBoundary
           key={`${currentLife.id}-${activeTab}`}
           onReset={() => loadLifeData(currentLife.id)}

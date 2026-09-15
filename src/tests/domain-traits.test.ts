@@ -26,9 +26,9 @@ describe('Domain Traits Logic', () => {
       expect(isTraitActive(mockTrait({ equip_state: 'unequipped' }))).toBe(false);
     });
 
-    it('falls back to icon for legacy records', () => {
-      expect(isTraitActive(mockTrait({ equip_state: null, icon: 'active' }))).toBe(true);
-      expect(isTraitBenched(mockTrait({ equip_state: null, icon: 'benched' }))).toBe(true);
+    it('does not infer equipment state from the presentation icon', () => {
+      expect(isTraitActive(mockTrait({ equip_state: null, icon: 'active' }))).toBe(false);
+      expect(isTraitBenched(mockTrait({ equip_state: null, icon: 'benched' }))).toBe(false);
       expect(isTraitUnequipped(mockTrait({ equip_state: null, icon: 'other' }))).toBe(true);
     });
 

@@ -4,30 +4,21 @@ import type { Trait, TraitRelation } from '../api/types';
  * 判断特质是否处于激活上阵状态 (active)
  */
 export function isTraitActive(trait: Trait): boolean {
-  if (trait.equip_state) {
-    return trait.equip_state === 'active';
-  }
-  return trait.icon === 'active';
+  return trait.equip_state === 'active';
 }
 
 /**
  * 判断特质是否处于雪藏/下阵状态 (benched)
  */
 export function isTraitBenched(trait: Trait): boolean {
-  if (trait.equip_state) {
-    return trait.equip_state === 'benched';
-  }
-  return trait.icon === 'benched';
+  return trait.equip_state === 'benched';
 }
 
 /**
  * 判断特质是否处于未上阵状态 (unequipped)
  */
 export function isTraitUnequipped(trait: Trait): boolean {
-  if (trait.equip_state) {
-    return trait.equip_state === 'unequipped';
-  }
-  return trait.icon !== 'active' && trait.icon !== 'benched';
+  return trait.equip_state === 'unequipped' || !trait.equip_state;
 }
 
 /**

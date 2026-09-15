@@ -40,26 +40,28 @@ pub fn run() {
                 log::info!("⚡ 启用纯净便携模式 (Portable Mode)，数据存储目录: {:?}", p);
                 p
             } else {
-                app.path()
-                    .app_data_dir()
-                    .unwrap_or_else(|_| std::env::current_dir().unwrap().join("life_strategy_data"))
+                match app.path().app_data_dir() {
+                    Ok(path) => path,
+                    Err(_) => std::env::current_dir()?.join("life_strategy_data"),
+                }
             };
 
-            std::fs::create_dir_all(&app_data_dir).expect("failed to create app data directory");
+            std::fs::create_dir_all(&app_data_dir)?;
             log::info!("Database and storage directory: {:?}", app_data_dir);
 
             // 初始化 SQLite 数据库与迁移引擎
-            let db_state =
-                DbState::new(&app_data_dir).expect("failed to initialize sqlite database");
+            let db_state = DbState::new(&app_data_dir)?;
 
             // 首次启动若无 Life，默认创建一个，实现约定 §3.1
             {
-                let mut conn = db_state.conn.lock().expect("failed to lock db conn");
-                let lives = Repository::list_lives(&conn).expect("failed to check existing lives");
+                let mut conn = db_state
+                    .conn
+                    .lock()
+                    .map_err(|_| std::io::Error::other("数据库连接锁已损坏"))?;
+                let lives = Repository::list_lives(&conn)?;
                 if lives.is_empty() {
                     log::info!("No life found, creating initial default life: 第一人生");
-                    Repository::create_life(&mut conn, "第一人生")
-                        .expect("failed to create default life");
+                    Repository::create_life(&mut conn, "第一人生")?;
                 }
             }
 

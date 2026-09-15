@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { WorldSnapshot } from '../../api/types';
 import { api } from '../../api/client';
+import { useToast } from '../../components/ToastProvider';
 import { Camera, Plus, Trash2, Eye, X, ShieldAlert } from 'lucide-react';
 import { soundFx } from '../../utils/soundEffects';
 
@@ -9,41 +10,57 @@ interface SnapshotsViewProps {
 }
 
 export const SnapshotsView: React.FC<SnapshotsViewProps> = ({ lifeId }) => {
+  const toast = useToast();
   const [snapshots, setSnapshots] = useState<WorldSnapshot[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [inspectingSnapshot, setInspectingSnapshot] = useState<WorldSnapshot | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const loadSeqRef = useRef(0);
+  const activeLifeIdRef = useRef(lifeId);
 
   useEffect(() => {
+    activeLifeIdRef.current = lifeId;
     loadSnapshots();
   }, [lifeId]);
 
   const loadSnapshots = async () => {
+    activeLifeIdRef.current = lifeId;
+    const requestSeq = ++loadSeqRef.current;
     try {
       const data = await api.listWorldSnapshots(lifeId);
+      if (activeLifeIdRef.current !== lifeId || loadSeqRef.current !== requestSeq) return;
       setSnapshots(data);
-    } catch (err) {
-      console.error('Failed to load snapshots', err);
+    } catch (err: unknown) {
+      if (activeLifeIdRef.current !== lifeId || loadSeqRef.current !== requestSeq) return;
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`加载世界快照失败: ${message}`);
     }
   };
 
   const handleCreateSnapshot = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+    const snapshotName = name.trim();
+    setIsSaving(true);
     try {
       soundFx.playStamp();
       // 聚合当前完整世界状态 payload (§11.1 / P1-DATA-07)
       const exportJson = await api.exportLifeJson(lifeId);
       const payloadJson = typeof exportJson === 'string' ? exportJson : JSON.stringify(exportJson || {});
 
-      await api.createWorldSnapshot(lifeId, name.trim(), description.trim() || undefined, payloadJson);
+      await api.createWorldSnapshot(lifeId, snapshotName, description.trim() || undefined, payloadJson);
       setName('');
       setDescription('');
       setShowCreateModal(false);
-      loadSnapshots();
-    } catch (err) {
-      console.error('Failed to create world snapshot', err);
+      await loadSnapshots();
+      toast.success(`世界快照「${snapshotName}」已封存`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`保存世界快照失败: ${message}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -52,9 +69,19 @@ export const SnapshotsView: React.FC<SnapshotsViewProps> = ({ lifeId }) => {
     try {
       soundFx.playVoid();
       await api.deleteWorldSnapshot(lifeId, snapshotId);
-      loadSnapshots();
-    } catch (err) {
-      console.error('Failed to delete snapshot', err);
+      await loadSnapshots();
+      toast.info(`世界快照「${snapName}」已删除`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`删除世界快照失败: ${message}`);
+    }
+  };
+
+  const getSnapshotPayload = (payload: string): string => {
+    try {
+      return JSON.stringify(JSON.parse(payload || '{}'), null, 2);
+    } catch {
+      return '该快照的结构化数据无法解析，原始内容可能已损坏。';
     }
   };
 
@@ -176,10 +203,10 @@ export const SnapshotsView: React.FC<SnapshotsViewProps> = ({ lifeId }) => {
                 </button>
                 <button
                   type="submit"
-                  disabled={!name.trim()}
+                  disabled={!name.trim() || isSaving}
                   className="px-4 py-1.5 text-sm rounded bg-amber-600 hover:bg-amber-500 text-black font-semibold disabled:opacity-50"
                 >
-                  确认冻结并保存
+                  {isSaving ? '正在封存...' : '确认冻结并保存'}
                 </button>
               </div>
             </form>
@@ -212,7 +239,7 @@ export const SnapshotsView: React.FC<SnapshotsViewProps> = ({ lifeId }) => {
 
             <div className="flex-1 overflow-y-auto bg-slate-950 border border-slate-800 rounded p-4 font-mono text-xs text-slate-300 leading-relaxed">
               <pre className="whitespace-pre-wrap break-all">
-                {JSON.stringify(JSON.parse(inspectingSnapshot.payload_json || '{}'), null, 2)}
+                {getSnapshotPayload(inspectingSnapshot.payload_json)}
               </pre>
             </div>
 

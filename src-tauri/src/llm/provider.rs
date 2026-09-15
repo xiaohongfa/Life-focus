@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use url::Url;
 
+const MAX_ERROR_BODY_BYTES: usize = 2048;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String, // "system" | "user" | "assistant"
@@ -58,8 +60,13 @@ pub fn build_openai_endpoint(base_url: &str) -> String {
 
 pub fn build_gemini_endpoint(base_url: &str, model: &str, api_key: &str) -> String {
     let mut base = base_url.trim().trim_end_matches('/').to_string();
-    if base == "https://api.deepseek.com" || base == "https://api.openai.com/v1" {
-        base = "https://generativelanguage.googleapis.com".to_string();
+    // Gemini 的设置页允许用户填入根地址或已带 /v1beta 的地址，统一在这里
+    // 规范化，避免出现 /v1beta/v1beta 或重复 models 路径。
+    for suffix in ["/v1beta", "/v1"] {
+        if base.ends_with(suffix) {
+            base.truncate(base.len() - suffix.len());
+            break;
+        }
     }
     format!(
         "{base}/v1beta/models/{model}:generateContent?key={}",
@@ -126,11 +133,7 @@ async fn execute_openai_compatible(
 
     let status = resp.status();
     if !status.is_success() {
-        let mut err_body = resp.text().await.unwrap_or_default();
-        if err_body.len() > 2048 {
-            err_body.truncate(2048);
-            err_body.push_str("...[truncated]");
-        }
+        let err_body = truncate_error_body(&resp.text().await.unwrap_or_default());
         return Err(format!(
             "服务端响应错误 (HTTP {status}): {}",
             sanitize_error(&err_body, api_key)
@@ -142,28 +145,7 @@ async fn execute_openai_compatible(
         .await
         .map_err(|e| format!("解析模型 JSON 响应失败: {e}"))?;
 
-    let choices = json
-        .get("choices")
-        .and_then(|c| c.as_array())
-        .ok_or_else(|| {
-            if let Some(err_obj) = json.get("error") {
-                format!("服务商返回错误: {err_obj}")
-            } else {
-                "模型响应格式异常，未找到 choices 数组".to_string()
-            }
-        })?;
-
-    if choices.is_empty() {
-        return Err("模型响应 choices 为空".to_string());
-    }
-
-    let content = choices[0]
-        .get("message")
-        .and_then(|m| m.get("content"))
-        .and_then(|c| c.as_str())
-        .ok_or_else(|| "模型响应格式异常，未找到 choices[0].message.content".to_string())?;
-
-    Ok(content.to_string())
+    extract_openai_content(&json, api_key)
 }
 
 async fn execute_gemini(
@@ -228,11 +210,7 @@ async fn execute_gemini(
 
     let status = resp.status();
     if !status.is_success() {
-        let mut err_body = resp.text().await.unwrap_or_default();
-        if err_body.len() > 2048 {
-            err_body.truncate(2048);
-            err_body.push_str("...[truncated]");
-        }
+        let err_body = truncate_error_body(&resp.text().await.unwrap_or_default());
         return Err(format!(
             "Gemini 服务端响应错误 (HTTP {status}): {}",
             sanitize_error(&err_body, api_key)
@@ -244,31 +222,79 @@ async fn execute_gemini(
         .await
         .map_err(|e| format!("解析 Gemini 响应失败: {e}"))?;
 
+    extract_gemini_content(&json, api_key)
+}
+
+pub fn extract_openai_content(json: &serde_json::Value, api_key: &str) -> Result<String, String> {
+    let choices = json
+        .get("choices")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| {
+            if let Some(error) = json.get("error") {
+                format!(
+                    "服务商返回错误: {}",
+                    truncate_error_body(&sanitize_error(&error.to_string(), api_key))
+                )
+            } else {
+                "模型响应格式异常，未找到 choices 数组".to_string()
+            }
+        })?;
+    let first = choices
+        .first()
+        .ok_or_else(|| "模型响应 choices 为空".to_string())?;
+    let content = first
+        .get("message")
+        .and_then(|message| message.get("content"))
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "模型响应格式异常，未找到有效的 message.content 文本".to_string())?;
+    Ok(content.to_string())
+}
+
+pub fn extract_gemini_content(json: &serde_json::Value, api_key: &str) -> Result<String, String> {
     let candidates = json
         .get("candidates")
-        .and_then(|c| c.as_array())
+        .and_then(|value| value.as_array())
         .ok_or_else(|| {
-            if let Some(err_obj) = json.get("error") {
-                format!("Gemini 服务商返回错误: {err_obj}")
+            if let Some(error) = json.get("error") {
+                format!(
+                    "Gemini 服务商返回错误: {}",
+                    truncate_error_body(&sanitize_error(&error.to_string(), api_key))
+                )
             } else {
                 "Gemini 响应格式异常，未找到 candidates 数组".to_string()
             }
         })?;
-
-    if candidates.is_empty() {
-        return Err("Gemini 响应 candidates 为空（可能被安全策略拦截）".to_string());
-    }
-
-    let text = candidates[0]
+    let first = candidates
+        .first()
+        .ok_or_else(|| "Gemini 响应 candidates 为空（可能被安全策略拦截）".to_string())?;
+    let text = first
         .get("content")
-        .and_then(|c| c.get("parts"))
-        .and_then(|p| p.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|part| part.get("text"))
-        .and_then(|t| t.as_str())
-        .ok_or_else(|| "Gemini 响应中未找到 candidates[0].content.parts[0].text".to_string())?;
-
+        .and_then(|content| content.get("parts"))
+        .and_then(|parts| parts.as_array())
+        .and_then(|parts| {
+            parts
+                .iter()
+                .find_map(|part| part.get("text").and_then(|v| v.as_str()))
+        })
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            "Gemini 响应中未找到有效的 candidates.content.parts.text 文本".to_string()
+        })?;
     Ok(text.to_string())
+}
+
+pub fn truncate_error_body(body: &str) -> String {
+    if body.len() <= MAX_ERROR_BODY_BYTES {
+        return body.to_string();
+    }
+    let mut end = MAX_ERROR_BODY_BYTES;
+    while !body.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...[truncated]", &body[..end])
 }
 
 pub fn sanitize_error(msg: &str, api_key: &str) -> String {
@@ -293,7 +319,7 @@ pub fn sanitize_error(msg: &str, api_key: &str) -> String {
         remaining = &after_key[val_len..];
     }
     result.push_str(remaining);
-    result
+    truncate_error_body(&result)
 }
 
 #[cfg(test)]
@@ -370,5 +396,40 @@ mod tests {
             "mykey",
         );
         assert!(gemini_ep.contains("/v1beta/models/gemini-1.5-pro:generateContent?key=mykey"));
+        assert_eq!(
+            build_gemini_endpoint(
+                "https://generativelanguage.googleapis.com/v1beta/",
+                "gemini-1.5-pro",
+                "mykey"
+            ),
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=mykey"
+        );
+    }
+
+    #[test]
+    fn test_response_parsers_reject_malformed_payloads() {
+        let openai = serde_json::json!({"choices": [{"message": {"content": "  hello  "}}]});
+        assert_eq!(extract_openai_content(&openai, "secret").unwrap(), "hello");
+        assert!(extract_openai_content(&serde_json::json!({"choices": []}), "secret").is_err());
+        assert!(extract_openai_content(
+            &serde_json::json!({"choices": [{"message": {"content": null}}]}),
+            "secret"
+        )
+        .is_err());
+
+        let gemini =
+            serde_json::json!({"candidates": [{"content": {"parts": [{"text": "  hi  "}]}}]});
+        assert_eq!(extract_gemini_content(&gemini, "secret").unwrap(), "hi");
+        assert!(extract_gemini_content(&serde_json::json!({"candidates": []}), "secret").is_err());
+        let provider_error = serde_json::json!({"error": {"message": "secret"}});
+        let message = extract_openai_content(&provider_error, "secret").unwrap_err();
+        assert!(!message.contains("secret"));
+    }
+
+    #[test]
+    fn test_error_body_is_limited_without_panicking_on_utf8() {
+        let safe = sanitize_error(&"啊".repeat(2_000), "unused");
+        assert!(safe.len() <= MAX_ERROR_BODY_BYTES + "...[truncated]".len());
+        assert!(safe.ends_with("...[truncated]"));
     }
 }

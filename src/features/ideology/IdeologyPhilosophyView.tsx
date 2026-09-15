@@ -99,8 +99,9 @@ export const IdeologyPhilosophyView: React.FC<IdeologyPhilosophyViewProps> = ({ 
       setProposedText(res);
       setAiCmdOpen(false);
       setProposalModalOpen(true);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to run AI refine:', err);
+      toast.error(`AI 润色失败: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsGeneratingAi(false);
     }
@@ -116,8 +117,9 @@ export const IdeologyPhilosophyView: React.FC<IdeologyPhilosophyViewProps> = ({ 
         await api.updateSituation(lifeId, finalText);
       }
       setProposalModalOpen(false);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to accept proposal:', err);
+      toast.error(`采纳建议失败: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 

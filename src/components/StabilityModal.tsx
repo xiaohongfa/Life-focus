@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Stability, StabilityChange } from '../api/types';
 import { api } from '../api/client';
+import { useToast } from './ToastProvider';
 import { Activity, History, ArrowRight, X } from 'lucide-react';
 
 interface StabilityModalProps {
@@ -11,6 +12,7 @@ interface StabilityModalProps {
 }
 
 export const StabilityModal: React.FC<StabilityModalProps> = ({ lifeId, stability, onClose, onUpdated }) => {
+  const toast = useToast();
   const [mode, setMode] = useState<'direct' | 'delta'>('direct');
   const [directVal, setDirectVal] = useState<string>(
     stability?.current_value !== null && stability?.current_value !== undefined
@@ -21,17 +23,25 @@ export const StabilityModal: React.FC<StabilityModalProps> = ({ lifeId, stabilit
   const [reason, setReason] = useState<string>('');
   const [history, setHistory] = useState<StabilityChange[]>([]);
   const [loading, setLoading] = useState(false);
+  const activeLifeIdRef = useRef(lifeId);
+  const loadSeqRef = useRef(0);
 
   useEffect(() => {
+    activeLifeIdRef.current = lifeId;
     loadHistory();
   }, [lifeId]);
 
   const loadHistory = async () => {
+    activeLifeIdRef.current = lifeId;
+    const requestSeq = ++loadSeqRef.current;
     try {
       const data = await api.getStabilityHistory(lifeId, 20);
+      if (activeLifeIdRef.current !== lifeId || loadSeqRef.current !== requestSeq) return;
       setHistory(data);
-    } catch (err) {
-      console.error('Failed to load stability history', err);
+    } catch (err: unknown) {
+      if (activeLifeIdRef.current !== lifeId || loadSeqRef.current !== requestSeq) return;
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`加载稳定度历史失败: ${message}`);
     }
   };
 
@@ -49,6 +59,7 @@ export const StabilityModal: React.FC<StabilityModalProps> = ({ lifeId, stabilit
     setLoading(true);
     try {
       const change = await api.setStability(lifeId, calculatedTarget, reason.trim() || undefined);
+      if (activeLifeIdRef.current !== lifeId) return;
       onUpdated({
         life_id: lifeId,
         current_value: change.after_value,
@@ -56,10 +67,12 @@ export const StabilityModal: React.FC<StabilityModalProps> = ({ lifeId, stabilit
       });
       setReason('');
       await loadHistory();
-    } catch (err) {
-      console.error('Failed to update stability', err);
+      toast.success('稳定度变更已记入历史');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`更新稳定度失败: ${message}`);
     } finally {
-      setLoading(false);
+      if (activeLifeIdRef.current === lifeId) setLoading(false);
     }
   };
 

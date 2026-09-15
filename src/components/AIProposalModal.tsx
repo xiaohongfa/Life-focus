@@ -23,6 +23,7 @@ export const AIProposalModal: React.FC<AIProposalModalProps> = ({
 }) => {
   const [editedText, setEditedText] = useState(proposedText);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Update state when proposedText changes
   React.useEffect(() => {
@@ -33,11 +34,13 @@ export const AIProposalModal: React.FC<AIProposalModalProps> = ({
 
   const handleConfirm = async () => {
     setIsSaving(true);
+    setSaveError(null);
     try {
       await onAccept(editedText);
       onClose();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to accept proposal', err);
+      setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSaving(false);
     }
@@ -70,6 +73,11 @@ export const AIProposalModal: React.FC<AIProposalModalProps> = ({
 
         {/* Content Comparison View */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {saveError && (
+            <div role="alert" className="rounded-lg border border-red-500/50 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+              保存失败：{saveError}
+            </div>
+          )}
           {originalText.trim() && (
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1.5">
