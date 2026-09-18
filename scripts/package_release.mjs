@@ -21,7 +21,7 @@ fs.mkdirSync(PKG_DIR, { recursive: true });
 const exeSrc = path.join(ROOT_DIR, 'src-tauri', 'target', 'release', 'life-strategy-game.exe');
 if (!fs.existsSync(exeSrc)) {
   console.error(`\n[FATAL] Release executable not found at: ${exeSrc}`);
-  console.error(`Please run 'pnpm build && cd src-tauri && cargo build --release' or 'pnpm tauri build' first.\n`);
+  console.error(`Please run 'pnpm tauri build --no-bundle' first to embed frontend assets into the binary.\n`);
   process.exit(1);
 }
 
