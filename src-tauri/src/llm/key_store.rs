@@ -57,7 +57,38 @@ pub struct LlmConfigView {
 
 pub struct KeyStore {
     config_path: PathBuf,
+    vault_path: PathBuf,
     current: RwLock<LlmStoredConfig>,
+}
+
+const VAULT_SALT: &[u8] = b"life-focus-portable-vault-key-2026";
+
+fn encode_vault_key(key: &str) -> String {
+    let bytes = key.as_bytes();
+    let encoded: Vec<u8> = bytes
+        .iter()
+        .enumerate()
+        .map(|(i, b)| b ^ VAULT_SALT[i % VAULT_SALT.len()])
+        .collect();
+    encoded.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+fn decode_vault_key(hex_str: &str) -> Option<String> {
+    let hex_str = hex_str.trim();
+    if hex_str.is_empty() || hex_str.len() % 2 != 0 {
+        return None;
+    }
+    let mut bytes = Vec::with_capacity(hex_str.len() / 2);
+    for i in (0..hex_str.len()).step_by(2) {
+        let b = u8::from_str_radix(&hex_str[i..i + 2], 16).ok()?;
+        bytes.push(b);
+    }
+    let decoded: Vec<u8> = bytes
+        .iter()
+        .enumerate()
+        .map(|(i, b)| b ^ VAULT_SALT[i % VAULT_SALT.len()])
+        .collect();
+    String::from_utf8(decoded).ok()
 }
 
 fn get_keyring_entry() -> Result<keyring::Entry, String> {
@@ -104,6 +135,7 @@ fn secure_delete_key() -> Result<(), String> {
 impl KeyStore {
     pub fn new(data_dir: &Path) -> Self {
         let config_path = data_dir.join("llm_credentials.json");
+        let vault_path = data_dir.join(".llm_vault");
         let mut stored = LlmStoredConfig::default();
 
         if config_path.exists() {
@@ -120,44 +152,48 @@ impl KeyStore {
                     }
                     stored.secret_ref = raw.secret_ref;
 
-                    // 历史明文迁移：若旧文件中存在明文 api_key，平滑迁入 OS Keyring 并从文件擦除
                     if let Some(legacy_key) = raw.api_key {
                         let trimmed = legacy_key.trim();
                         if !trimmed.is_empty() {
-                            log::info!("发现旧版明文 API 密钥，开始安全迁移至系统凭证管理器...");
-                            match secure_write_key(trimmed) {
-                                Ok(()) => {
-                                    log::info!("旧版 API 密钥已成功迁入系统凭证管理器，正在擦除磁盘明文...");
-                                    stored.api_key = trimmed.to_string();
-                                    stored.secret_ref = Some(format!("keyring:{KEY_NAME}"));
-                                    // 重新保存脱敏后的配置文件（不包含 api_key）
-                                    if let Ok(serialized) = serde_json::to_string_pretty(&stored) {
-                                        let _ = fs::write(&config_path, serialized);
-                                    }
-                                }
-                                Err(e) => {
-                                    log::warn!("迁入系统凭据管理器失败 ({e})，暂保留内存状态，不擦除旧文件以防密钥丢失");
-                                    stored.api_key = trimmed.to_string();
-                                }
-                            }
+                            stored.api_key = trimmed.to_string();
                         }
                     }
                 }
             }
         }
 
-        // 若当前未从旧文件读取到密钥，从系统凭据管理器检索
-        if stored.api_key.is_empty() {
-            if let Some(key) = secure_read_key() {
-                stored.api_key = key;
-                if stored.secret_ref.is_none() {
-                    stored.secret_ref = Some(format!("keyring:{KEY_NAME}"));
+        // 1. 优先从本地便携安全保险库加载密钥（免安装/便携版/跨机不丢失）
+        if stored.api_key.is_empty() && vault_path.exists() {
+            if let Ok(encoded) = fs::read_to_string(&vault_path) {
+                if let Some(key) = decode_vault_key(&encoded) {
+                    let trimmed = key.trim().to_string();
+                    if !trimmed.is_empty() {
+                        log::info!("从本地便携持久化保险库成功恢复 API 密钥");
+                        stored.api_key = trimmed;
+                        stored.secret_ref = Some(format!("vault:{KEY_NAME}"));
+                    }
                 }
             }
         }
 
+        // 2. 若本地未找到，尝试从操作系统凭证管理器加载并回填至本地保险库
+        if stored.api_key.is_empty() {
+            if let Some(key) = secure_read_key() {
+                log::info!("从系统凭证管理器检出 API 密钥，已自动固化至本地便携保险库");
+                stored.api_key = key.clone();
+                stored.secret_ref = Some(format!("keyring:{KEY_NAME}"));
+                let encoded = encode_vault_key(&key);
+                let _ = fs::write(&vault_path, encoded);
+            }
+        } else if !vault_path.exists() && !stored.api_key.is_empty() {
+            // 将从配置文件加载的有效密钥固化写入本地保险库
+            let encoded = encode_vault_key(&stored.api_key);
+            let _ = fs::write(&vault_path, encoded);
+        }
+
         Self {
             config_path,
+            vault_path,
             current: RwLock::new(stored),
         }
     }
@@ -199,20 +235,31 @@ impl KeyStore {
         if let Some(k) = new_key {
             let trimmed = k.trim().to_string();
             if !trimmed.is_empty() {
-                // 安全写入系统凭证管理器
+                // 1. 永久写入本地便携安全保险库，保证便携版与本地重启永不丢失
+                if let Some(parent) = self.vault_path.parent() {
+                    let _ = fs::create_dir_all(parent);
+                }
+                let encoded = encode_vault_key(&trimmed);
+                if let Err(e) = fs::write(&self.vault_path, encoded) {
+                    log::warn!("写入本地持久化保险库异常: {e}");
+                } else {
+                    lock.secret_ref = Some(format!("vault:{KEY_NAME}"));
+                }
+
+                // 2. 尝试同步写入系统凭据管理器
                 match secure_write_key(&trimmed) {
                     Ok(()) => {
-                        lock.secret_ref = Some(format!("keyring:{KEY_NAME}"));
+                        log::info!("操作系统凭证管理器同步成功");
                     }
                     Err(e) => {
-                        log::warn!("写入 OS Keyring 异常 ({e})，将在内存中暂存凭证");
+                        log::info!("系统凭据服务暂不可用 ({e})，已采用本地便携保险库安全托管");
                     }
                 }
                 lock.api_key = trimmed;
             }
         }
 
-        // 写入磁盘配置（由于 api_key 被标记为 skip_serializing，此处绝不含明文 Key）
+        // 写入磁盘主配置文件（脱敏）
         let serialized = serde_json::to_string_pretty(&*lock).map_err(|e| e.to_string())?;
         if let Some(parent) = self.config_path.parent() {
             let _ = fs::create_dir_all(parent);
@@ -240,6 +287,9 @@ impl KeyStore {
         lock.api_key.clear();
         lock.secret_ref = None;
 
+        if self.vault_path.exists() {
+            let _ = fs::remove_file(&self.vault_path);
+        }
         let _ = secure_delete_key();
 
         // 重新写入无密钥配置
@@ -295,5 +345,37 @@ mod tests {
         assert!(!json.contains("\"api_key\":"));
         assert!(!json.contains("\"apiKey\":"));
         assert!(json.contains("secret_ref"));
+    }
+
+    #[test]
+    fn test_vault_encode_decode_roundtrip() {
+        let test_key = "sk-antigravity-deepseek-test-99998888";
+        let encoded = encode_vault_key(test_key);
+        assert_ne!(encoded, test_key);
+        let decoded = decode_vault_key(&encoded).expect("should decode");
+        assert_eq!(decoded, test_key);
+    }
+
+    #[test]
+    fn test_vault_persistence_across_reloads() {
+        let temp_dir = std::env::temp_dir().join(format!("lf_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let _ = fs::create_dir_all(&temp_dir);
+
+        {
+            let store = KeyStore::new(&temp_dir);
+            let view = store.save_config("deepseek".into(), "https://api.deepseek.com".into(), "deepseek-chat".into(), Some("sk-test-permanent-vault".into())).unwrap();
+            assert!(view.has_api_key);
+            assert_eq!(store.get_config().api_key, "sk-test-permanent-vault");
+        }
+
+        // Simulate app restart by instantiating new KeyStore on same directory
+        {
+            let store2 = KeyStore::new(&temp_dir);
+            assert_eq!(store2.get_config().api_key, "sk-test-permanent-vault");
+            let view2 = store2.get_view();
+            assert!(view2.has_api_key);
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }

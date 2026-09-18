@@ -2,14 +2,19 @@ import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import type { Focus, FocusStatus } from '../../api/types';
 import {
-  BookOpen,
   Briefcase,
   Home,
   Heart,
   Shield,
   Compass,
   Star,
+  Coins,
+  Factory,
+  Wrench,
+  GraduationCap,
+  Trophy,
 } from 'lucide-react';
+import { soundFx } from '../../utils/soundEffects';
 
 export interface FocusNodeData {
   focus: Focus;
@@ -18,53 +23,67 @@ export interface FocusNodeData {
   subCount?: { total: number; done: number };
 }
 
-// 智能提取国策徽章中心象征图案
+// 智能提取国策徽章中心象征图案 (匹配 HOI4 军政企社各领域)
 function getFocusEmblem(title: string) {
-  if (/学|读|课|校|研|教育|考|智|书/i.test(title)) return BookOpen;
-  if (/职|工|业|商|企|升|资|钱|薪|拼/i.test(title)) return Briefcase;
+  if (/学|读|课|校|研|教育|考|智|书/i.test(title)) return GraduationCap;
+  if (/职|工|业|商|企|升|拼/i.test(title)) return Briefcase;
+  if (/钱|资|财|薪|金|币|富/i.test(title)) return Coins;
+  if (/产|造|建|工|厂|实/i.test(title)) return Factory;
   if (/家|亲|子|房|居|友|室/i.test(title)) return Home;
   if (/健|身|体|心|医|跑|炼|病|生/i.test(title)) return Heart;
-  if (/政|法|权|领|导|官|令/i.test(title)) return Shield;
+  if (/政|法|权|领|导|官|令|防|卫/i.test(title)) return Shield;
   if (/创|新|拓|探|旅|行/i.test(title)) return Compass;
+  if (/具|技|修|研|法/i.test(title)) return Wrench;
+  if (/成|胜|荣|奖|勋/i.test(title)) return Trophy;
   return Star;
 }
 
-// 状态对应的勋章与铭牌配置
-const statusMedalConfig: Record<
+// HOI4 风格月桂花环与铭牌状态配置
+const statusConfig: Record<
   FocusStatus,
   {
-    medallionClass: string;
-    ribbonClass: string;
-    subText: string;
-    subColor: string;
-    stampText?: string;
+    wreathColor: string;
+    wreathGlow: string;
+    innerRing: string;
+    statusText: string;
+    statusColor: string;
+    badgeBorder: string;
+    stampBadge?: string;
   }
 > = {
   active: {
-    medallionClass: 'medallion-badge-emerald animate-radar-pulse',
-    ribbonClass: 'grosgrain-ribbon-emerald',
-    subText: 'IN PROGRESS',
-    subColor: 'text-emerald-400',
+    wreathColor: 'text-[#4ade80]',
+    wreathGlow: 'animate-radar-pulse drop-shadow-[0_0_10px_rgba(74,222,128,0.7)]',
+    innerRing: 'border-emerald-500/80 bg-[#122316]',
+    statusText: '● 进行中',
+    statusColor: 'text-emerald-400',
+    badgeBorder: 'border-emerald-500/60',
   },
   completed: {
-    medallionClass: 'medallion-badge-gold',
-    ribbonClass: 'grosgrain-ribbon-red',
-    subText: 'ACHIEVED',
-    subColor: 'text-amber-300',
-    stampText: '战略达成',
+    wreathColor: 'text-[#fbbf24]',
+    wreathGlow: 'animate-golden-aura drop-shadow-[0_0_12px_rgba(245,158,11,0.85)]',
+    innerRing: 'border-[#f59e0b] bg-[#291f0c]',
+    statusText: '★ 已达成',
+    statusColor: 'text-amber-300',
+    badgeBorder: 'border-[#d4af37]',
+    stampBadge: '达成',
   },
   paused: {
-    medallionClass: 'medallion-badge-bronze',
-    ribbonClass: 'grosgrain-ribbon-red opacity-60',
-    subText: 'STANDBY',
-    subColor: 'text-amber-500',
+    wreathColor: 'text-[#d97706]',
+    wreathGlow: 'drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]',
+    innerRing: 'border-amber-700/60 bg-[#1f1810]',
+    statusText: '⏳ 休整中',
+    statusColor: 'text-amber-500',
+    badgeBorder: 'border-amber-700/50',
   },
   revoked: {
-    medallionClass: 'medallion-badge-bronze grayscale opacity-60',
-    ribbonClass: 'bg-zinc-800 opacity-40',
-    subText: 'VOID',
-    subColor: 'text-rose-400',
-    stampText: '作废撤销',
+    wreathColor: 'text-[#71717a]',
+    wreathGlow: 'grayscale opacity-75',
+    innerRing: 'border-zinc-700 bg-[#18181b]',
+    statusText: '✕ 作废',
+    statusColor: 'text-rose-400 line-through',
+    badgeBorder: 'border-zinc-700',
+    stampBadge: '作废',
   },
 };
 
@@ -78,95 +97,126 @@ export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
   }
 
   const status = (focus.status || 'active') as FocusStatus;
-  const config = statusMedalConfig[status] || statusMedalConfig.active;
+  const cfg = statusConfig[status] || statusConfig.active;
   const EmblemIcon = getFocusEmblem(focus.title);
   const subCount = nodeData?.subCount;
 
+  const handleClick = () => {
+    soundFx.playFocusSelect();
+    if (onSelectNode) {
+      onSelectNode(focus);
+    }
+  };
+
   return (
     <div
-      onClick={() => onSelectNode && onSelectNode(focus)}
+      onClick={handleClick}
       className="relative flex flex-col items-center select-none cursor-pointer group transition duration-200 hover:scale-105"
-      style={{ width: 148 }}
+      style={{ width: 154 }}
     >
-      {/* 1. 顶部折叠式织锦勋带 (Folded Hanging Grosgrain Ribbon) */}
-      <div className="flex flex-col items-center -mb-2 z-10">
-        {/* 铜质挂带条扣 (Brass Ribbon Bar Clip) */}
-        <div className="w-10 h-1.5 rounded-sm bg-gradient-to-r from-[#947432] via-[#e5c777] to-[#785b20] border border-[#3b2b09] shadow-[0_1px_2px_rgba(0,0,0,0.8)]" />
-        
-        {/* 丝织勋带本体 */}
-        <div
-          className={`w-7 h-5 ${config.ribbonClass} relative overflow-hidden`}
-          style={{
-            clipPath: 'polygon(0% 0%, 100% 0%, 100% 80%, 50% 100%, 0% 80%)',
-          }}
+      {/* 1. HOI4 原生金色月桂冠大徽记 (Golden Laurel Wreath) */}
+      <div className={`relative flex items-center justify-center z-20 ${cfg.wreathGlow}`}>
+        {/* SVG 月桂花环外圈 (高精浮雕月桂叶) */}
+        <svg
+          viewBox="0 0 100 100"
+          className="w-20 h-20 pointer-events-none drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]"
         >
-          {/* 勋带微弱金丝织纹质感 */}
-          <div className="absolute inset-0 opacity-40 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.8)_0%,transparent_70%)]" />
-        </div>
-      </div>
+          <defs>
+            <linearGradient id={`goldGrad-${focus.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#fff8db" />
+              <stop offset="35%" stopColor="#f5c742" />
+              <stop offset="70%" stopColor="#b8861b" />
+              <stop offset="100%" stopColor="#634509" />
+            </linearGradient>
+            <linearGradient id={`emeraldGrad-${focus.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#bbf7d0" />
+              <stop offset="50%" stopColor="#22c55e" />
+              <stop offset="100%" stopColor="#14532d" />
+            </linearGradient>
+            <linearGradient id={`ironGrad-${focus.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#d1d5db" />
+              <stop offset="60%" stopColor="#6b7280" />
+              <stop offset="100%" stopColor="#374151" />
+            </linearGradient>
+          </defs>
 
-      {/* 2. 核心 3D 浮雕金属勋章 (3D Embossed Medal Badge) */}
-      <div className="relative flex items-center justify-center z-20">
-        {/* 勋章外圈月桂花环 / 齿轮轮廓 */}
+          {/* 左侧月桂叶枝 */}
+          <path
+            d="M 50 90 C 25 86 10 65 14 42 C 16 30 26 18 38 12 C 34 20 33 30 38 38 C 30 34 22 44 26 54 C 22 58 24 70 34 76 C 38 78 44 84 50 90 Z"
+            fill={status === 'revoked' ? `url(#ironGrad-${focus.id})` : status === 'active' ? `url(#emeraldGrad-${focus.id})` : `url(#goldGrad-${focus.id})`}
+            stroke="#261b05"
+            strokeWidth="1"
+          />
+          {/* 右侧月桂叶枝 */}
+          <path
+            d="M 50 90 C 75 86 90 65 86 42 C 84 30 74 18 62 12 C 66 20 67 30 62 38 C 70 34 78 44 74 54 C 78 58 76 70 66 76 C 62 78 56 84 50 90 Z"
+            fill={status === 'revoked' ? `url(#ironGrad-${focus.id})` : status === 'active' ? `url(#emeraldGrad-${focus.id})` : `url(#goldGrad-${focus.id})`}
+            stroke="#261b05"
+            strokeWidth="1"
+          />
+          {/* 底部扎带蝴蝶结金环 */}
+          <circle cx="50" cy="88" r="4.5" fill="#f59e0b" stroke="#3b2605" strokeWidth="1" />
+        </svg>
+
+        {/* 徽记中心深色内凹盘 */}
         <div
-          className={`w-18 h-18 rounded-full flex items-center justify-center ${config.medallionClass} relative`}
-          style={{
-            clipPath: 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)',
-          }}
+          className={`absolute w-12 h-12 rounded-full flex items-center justify-center border-2 shadow-[inset_0_3px_6px_rgba(0,0,0,0.9),0_2px_4px_rgba(0,0,0,0.7)] ${cfg.innerRing}`}
         >
-          {/* 勋章内圈月桂叶压花底纹 SVG */}
-          <svg viewBox="0 0 100 100" className="absolute inset-1 w-full h-full pointer-events-none opacity-40">
-            <circle cx="50" cy="50" r="42" fill="none" stroke="#2b1f09" strokeWidth="2.5" strokeDasharray="3 4" />
-            <circle cx="50" cy="50" r="36" fill="none" stroke="#fff" strokeWidth="1" opacity="0.6" />
-          </svg>
-
-          {/* 勋章中心高浮雕核心徽记 (Embossed Center Emblem) */}
-          <div className="p-2.5 rounded-full bg-gradient-to-br from-[#2a2012] via-[#1a140b] to-[#0d0a06] border border-[#d4af37]/70 shadow-[inset_0_2px_4px_rgba(0,0,0,0.9),0_2px_4px_rgba(255,255,255,0.15)] flex items-center justify-center z-10">
-            <EmblemIcon className="w-5 h-5 text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" />
-          </div>
-
-          {/* 勋章表面玻璃反光弧光 */}
-          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent pointer-events-none" />
+          <EmblemIcon
+            className={`w-6 h-6 ${
+              status === 'completed'
+                ? 'text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]'
+                : status === 'active'
+                ? 'text-emerald-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]'
+                : 'text-slate-300'
+            }`}
+          />
         </div>
 
-        {/* 达成 / 作废状态倾斜红色火漆印章 (Distressed Red Rubber Stamp) */}
-        {config.stampText && (
-          <div className="absolute -top-1 -right-3 z-30 pointer-events-none">
+        {/* 达成 / 作废状态火漆小印章 */}
+        {cfg.stampBadge && (
+          <div className="absolute -top-1 -right-2 z-30 pointer-events-none">
             <span
-              className={`distressed-stamp-red text-[9px] px-1 py-0.2 rounded-sm shadow-md font-mono font-black ${
+              className={`text-[9px] px-1.5 py-0.2 rounded-sm font-mono font-black border shadow-md ${
                 status === 'completed'
-                  ? 'border-[#991b1b] text-[#991b1b] bg-amber-50/80 shadow-[0_0_8px_rgba(185,28,28,0.4)]'
-                  : 'border-zinc-700 text-zinc-400 bg-black/80'
+                  ? 'border-amber-400 text-amber-300 bg-black/85 shadow-[0_0_8px_rgba(245,158,11,0.6)]'
+                  : 'border-rose-500 text-rose-400 bg-black/85'
               }`}
             >
-              {config.stampText}
+              {cfg.stampBadge}
             </span>
           </div>
         )}
       </div>
 
-      {/* 3. 底部复古深铜椭圆铭牌 (Engraved Brass Plaque / Nameplate) */}
-      <div className="relative -mt-2 z-20 w-full flex flex-col items-center">
-        <div className="w-full px-2 py-1.5 rounded-md bg-gradient-to-b from-[#2a2216] via-[#1a150d] to-[#100d08] border-1.5 border-[#8c6f31] shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,235,165,0.4)] flex flex-col items-center text-center">
-          {/* 铭牌两侧微型螺栓 */}
-          <div className="absolute left-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#caa858] border border-[#3b2b09] shadow-inner" />
-          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#caa858] border border-[#3b2b09] shadow-inner" />
+      {/* 2. HOI4 原生枪钢铆钉铭牌 (Gunmetal Nameplate with Crisp White Text) */}
+      <div className="relative -mt-2.5 z-20 w-full flex flex-col items-center">
+        <div
+          className={`w-full px-2 py-1.5 rounded-sm bg-gradient-to-b from-[#252c34] via-[#1a1f25] to-[#121518] border-1.5 border-[#465261] border-t-[#67778c] border-l-[#546274] shadow-[0_6px_16px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.25)] flex flex-col items-center text-center ${cfg.badgeBorder}`}
+        >
+          {/* 铭牌四角金属微型柳钉 */}
+          <div className="absolute left-1.5 top-1.5 w-1.5 h-1.5 rounded-full bg-[#8392a5] border border-[#16191f] shadow-inner" />
+          <div className="absolute right-1.5 top-1.5 w-1.5 h-1.5 rounded-full bg-[#8392a5] border border-[#16191f] shadow-inner" />
+          <div className="absolute left-1.5 bottom-1.5 w-1.5 h-1.5 rounded-full bg-[#8392a5] border border-[#16191f] shadow-inner" />
+          <div className="absolute right-1.5 bottom-1.5 w-1.5 h-1.5 rounded-full bg-[#8392a5] border border-[#16191f] shadow-inner" />
 
-          {/* 国策主标题 */}
+          {/* 国策主标题：高对比度纯白字体，清晰锐利 */}
           <span
-            className="font-serif font-black text-xs text-[#f4edd9] group-hover:text-amber-200 transition drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] truncate max-w-[115px]"
+            className="font-sans font-bold text-[11px] leading-tight text-[#ffffff] group-hover:text-amber-200 transition drop-shadow-[0_1px_2px_rgba(0,0,0,1)] truncate max-w-[124px]"
             title={focus.title}
           >
             {focus.title}
           </span>
 
-          {/* 战备英文字根与子任务微型达成状态 */}
-          <div className="flex items-center space-x-1 mt-0.5">
-            <span className={`text-[8px] font-mono tracking-wider font-extrabold uppercase ${config.subColor}`}>
-              {config.subText}
+          {/* 战役态势标签与步骤徽章 */}
+          <div className="flex items-center space-x-1.5 mt-1">
+            <span
+              className={`text-[8.5px] font-mono tracking-wider font-extrabold uppercase ${cfg.statusColor}`}
+            >
+              {cfg.statusText}
             </span>
             {subCount && subCount.total > 0 && (
-              <span className="text-[8px] font-mono px-1 py-0.1 rounded bg-[#0d120f] border border-strategy-gold/40 text-amber-200">
+              <span className="text-[8px] font-mono px-1 py-0.2 rounded-sm bg-[#0a0d10] border border-[#3b4452] text-amber-300 font-bold shadow-inner">
                 {subCount.done}/{subCount.total}
               </span>
             )}
@@ -174,36 +224,37 @@ export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
         </div>
       </div>
 
-      {/* 4. 真实战术连线手柄：黄铜圆珠连接点 (Ball-Joint Connection Pins) */}
+      {/* 3. 真实战术连线手柄：金色圆珠点 */}
       <Handle
         type="target"
         position={Position.Top}
         id="target-top"
-        className="!w-4 !h-4 !-top-1 !bg-gradient-to-b !from-[#ffd778] !to-[#966b1a] !border-1.5 !border-[#261c06] !rounded-full shadow-[0_0_8px_rgba(234,179,8,0.7)] transition-all hover:scale-130 hover:!bg-yellow-100 cursor-crosshair z-30"
-        title="接收前置战略依赖（点击拖拽连线）"
+        className="!w-4 !h-4 !-top-1 !bg-gradient-to-b !from-[#fef08a] !to-[#ca8a04] !border-1.5 !border-[#1c1917] !rounded-full shadow-[0_0_8px_rgba(234,179,8,0.8)] transition-all hover:scale-130 hover:!bg-white cursor-crosshair z-30"
+        title="接收前置战略依赖"
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="source-bottom"
-        className="!w-4 !h-4 !-bottom-1 !bg-gradient-to-b !from-[#ffd778] !to-[#966b1a] !border-1.5 !border-[#261c06] !rounded-full shadow-[0_0_8px_rgba(234,179,8,0.7)] transition-all hover:scale-130 hover:!bg-yellow-100 cursor-crosshair z-30"
-        title="引出后续战略路线（点击拖拽连线）"
+        className="!w-4 !h-4 !-bottom-1 !bg-gradient-to-b !from-[#fef08a] !to-[#ca8a04] !border-1.5 !border-[#1c1917] !rounded-full shadow-[0_0_8px_rgba(234,179,8,0.8)] transition-all hover:scale-130 hover:!bg-white cursor-crosshair z-30"
+        title="引出后续开拓路线"
       />
       <Handle
         type="target"
         position={Position.Left}
         id="target-left"
-        className="!w-3.5 !h-3.5 !left-0.5 !top-1/2 !-translate-y-1/2 !bg-gradient-to-b !from-[#eab308] !to-[#854d0e] !border-1.5 !border-[#261c06] !rounded-full shadow-[0_0_6px_rgba(234,179,8,0.6)] transition-all hover:scale-130 hover:!bg-yellow-100 cursor-crosshair z-30"
-        title="接收横向关联（点击拖拽连线）"
+        className="!w-3.5 !h-3.5 !left-0.5 !top-1/2 !-translate-y-1/2 !bg-gradient-to-b !from-[#fde047] !to-[#a16207] !border-1.5 !border-[#1c1917] !rounded-full shadow-[0_0_6px_rgba(234,179,8,0.7)] transition-all hover:scale-130 hover:!bg-white cursor-crosshair z-30"
+        title="接收横向关联"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="source-right"
-        className="!w-3.5 !h-3.5 !right-0.5 !top-1/2 !-translate-y-1/2 !bg-gradient-to-b !from-[#eab308] !to-[#854d0e] !border-1.5 !border-[#261c06] !rounded-full shadow-[0_0_6px_rgba(234,179,8,0.6)] transition-all hover:scale-130 hover:!bg-yellow-100 cursor-crosshair z-30"
-        title="引出横向/互斥路线（点击拖拽连线）"
+        className="!w-3.5 !h-3.5 !right-0.5 !top-1/2 !-translate-y-1/2 !bg-gradient-to-b !from-[#fde047] !to-[#a16207] !border-1.5 !border-[#1c1917] !rounded-full shadow-[0_0_6px_rgba(234,179,8,0.7)] transition-all hover:scale-130 hover:!bg-white cursor-crosshair z-30"
+        title="引出横向/互斥路线"
       />
     </div>
   );
 });
+
 

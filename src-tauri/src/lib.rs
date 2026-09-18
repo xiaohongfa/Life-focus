@@ -49,6 +49,9 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir)?;
             log::info!("Database and storage directory: {:?}", app_data_dir);
 
+            // 便携版无感自动更新与数据接力：检测全新便携环境时，自动识别并迁移邻近目录的旧版数据
+            commands::try_auto_migrate_fresh_portable(&app_data_dir);
+
             // 初始化 SQLite 数据库与迁移引擎
             let db_state = DbState::new(&app_data_dir)?;
 
@@ -140,6 +143,9 @@ pub fn run() {
             commands::delete_ideology,
             commands::update_national_spirit,
             commands::delete_national_spirit,
+            commands::get_portable_status,
+            commands::scan_portable_candidates,
+            commands::migrate_portable_data,
             llm::llm_get_config,
             llm::llm_save_config,
             llm::llm_clear_key,

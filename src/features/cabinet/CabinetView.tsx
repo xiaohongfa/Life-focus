@@ -224,9 +224,11 @@ export const CabinetView: React.FC<CabinetViewProps> = ({ lifeId, onOpenSettings
           prompt.trim(),
           current ? current.enabled : true
         );
+        soundFx.playCabinetAssign();
         toast.success(`参谋【${name.trim()}】档案已更新`);
       } else {
         await api.createStaffMember(lifeId, name.trim(), role.trim(), prompt.trim());
+        soundFx.playCabinetAssign();
         toast.success(`参谋【${name.trim()}】已入驻总参谋部`);
       }
       setShowMemberModal(false);
@@ -241,6 +243,7 @@ export const CabinetView: React.FC<CabinetViewProps> = ({ lifeId, onOpenSettings
   const handleToggleMember = async (m: StaffMember) => {
     try {
       await api.updateStaffMember(lifeId, m.id, m.name, m.role, m.prompt, !m.enabled);
+      soundFx.playCabinetAssign();
       toast.info(!m.enabled ? `参谋【${m.name}】已列席参会` : `参谋【${m.name}】已休会`);
       await loadData();
     } catch (err: unknown) {
@@ -254,6 +257,7 @@ export const CabinetView: React.FC<CabinetViewProps> = ({ lifeId, onOpenSettings
     if (!window.confirm(`确认解散参谋席位「${title}」？`)) return;
     try {
       await api.deleteStaffMember(lifeId, memberId);
+      soundFx.playVoid();
       toast.info(`参谋席位【${title}】已撤销解散`);
       await loadData();
     } catch (err: unknown) {

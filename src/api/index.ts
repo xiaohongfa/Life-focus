@@ -5,10 +5,12 @@ import { worldApi } from './world';
 import { archiveApi } from './archive';
 import { staffApi } from './staff';
 import { exportApi } from './export';
+import { portableApi } from './portable';
 
 export * from './types';
 export * from './core';
 export * from './mock';
+export * from './portable';
 export { lifeApi } from './life';
 export { focusApi } from './focus';
 export { traitApi } from './trait';
@@ -16,6 +18,7 @@ export { worldApi } from './world';
 export { archiveApi } from './archive';
 export { staffApi } from './staff';
 export { exportApi } from './export';
+export { portableApi } from './portable';
 
 /**
  * 统一 API 客户端
@@ -34,6 +37,7 @@ export const api = {
   ...archiveApi,
   ...staffApi,
   ...exportApi,
+  ...portableApi,
 
   // 模块化命名空间
   life: lifeApi,
@@ -43,6 +47,7 @@ export const api = {
   archive: archiveApi,
   staff: staffApi,
   export: exportApi,
+  portable: portableApi,
 };
 
 export default api;

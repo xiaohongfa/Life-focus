@@ -1,6 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Life, Stability } from '../api/types';
-import { Shield, Plus, Compass, GitFork, User, BookOpen, Flag, Archive, Camera, Users, Settings, Trash2 } from 'lucide-react';
+import {
+  Shield,
+  Plus,
+  Compass,
+  GitFork,
+  User,
+  BookOpen,
+  Flag,
+  Archive,
+  Camera,
+  Users,
+  Settings,
+  Trash2,
+  Volume2,
+  VolumeX,
+  Sliders,
+  ChevronDown,
+} from 'lucide-react';
 import { soundFx } from '../utils/soundEffects';
 
 interface HeaderProps {
@@ -15,8 +32,6 @@ interface HeaderProps {
   onOpenSettingsModal: () => void;
   onSelectTab: (tab: string) => void;
 }
-
-
 
 export const Header: React.FC<HeaderProps> = ({
   lives,
@@ -34,14 +49,36 @@ export const Header: React.FC<HeaderProps> = ({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newLifeName, setNewLifeName] = useState('');
   const [isSoundOn, setIsSoundOn] = useState(() => soundFx.isEnabled());
+  const [volume, setVolume] = useState(() => Math.round(soundFx.getVolume() * 100));
+  const [showVolumePopup, setShowVolumePopup] = useState(false);
+  const volumePopupRef = useRef<HTMLDivElement>(null);
+
+  // Close volume popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (volumePopupRef.current && !volumePopupRef.current.contains(e.target as Node)) {
+        setShowVolumePopup(false);
+      }
+    };
+    if (showVolumePopup) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showVolumePopup]);
 
   // 仪表盘绑定的真实战役数据
   const hasStab = stability?.current_value != null;
-  const stabDisplay = hasStab ? `${stability!.current_value!.toFixed(0)}%` : '未设定';
-  
+  const stabVal = hasStab ? Math.round(stability!.current_value!) : null;
+  const stabDisplay = hasStab ? `${stabVal}%` : '未设定';
 
-
-
+  const stabColor =
+    stabVal === null
+      ? 'text-slate-400'
+      : stabVal >= 50
+      ? 'text-emerald-400'
+      : stabVal >= 30
+      ? 'text-amber-400'
+      : 'text-rose-400';
 
   const navItems = [
     { id: 'dashboard', label: '战略总览', sub: 'OVERVIEW', code: 'CMD-01', icon: Compass },
@@ -60,86 +97,125 @@ export const Header: React.FC<HeaderProps> = ({
       onCreateLife(newLifeName.trim());
       setNewLifeName('');
       setShowCreateModal(false);
+      soundFx.playStamp();
     }
   };
 
   const handleToggleSound = () => {
     const next = soundFx.toggle();
     setIsSoundOn(next);
+    if (next) soundFx.playClick();
+  };
+
+  const handleVolumeChange = (newVal: number) => {
+    setVolume(newVal);
+    soundFx.setVolume(newVal / 100);
     soundFx.playClick();
   };
 
   return (
-    <header className="flex flex-col select-none shadow-[0_8px_25px_rgba(0,0,0,0.9)] z-30 border-b-2 border-[#3d2f14]">
-      {/* 顶部重工业拉丝黄铜指挥控制台 (Top Brushed Brass Console) */}
-      <div className="brushed-brass-console px-4 py-2 flex items-center justify-between relative">
-        {/* 左侧和右侧螺丝铆钉 */}
+    <header className="flex flex-col select-none shadow-[0_8px_30px_rgba(0,0,0,0.95)] z-30 border-b-2 border-[#2b333e]">
+      {/* 顶部重工业钢铁指挥控制台 (Authentic HOI4 Gunmetal Steel Chassis) */}
+      <div className="hoi4-header-bar px-4 py-2.5 flex items-center justify-between relative bg-gradient-to-b from-[#252c34] to-[#14181d]">
+        {/* 四角螺丝铆钉 */}
         <div className="absolute top-2 left-2 screw-rivet" />
         <div className="absolute bottom-2 left-2 screw-rivet" />
         <div className="absolute top-2 right-2 screw-rivet" />
         <div className="absolute bottom-2 right-2 screw-rivet" />
 
         {/* ===================== 左侧：指挥面板标识与战况速报 ===================== */}
-        <div className="flex items-center space-x-3 pl-4 py-1">
-          <div className="flex items-center space-x-2 px-3 py-1.5 rounded bg-gradient-to-b from-[#211a0e] to-[#120e07] border-2 border-[#82662c] shadow-[inset_0_2px_4px_rgba(0,0,0,0.8),0_2px_6px_rgba(0,0,0,0.6)]">
-            <Shield className="w-4 h-4 text-amber-300 drop-shadow" />
-            <span className="font-serif font-black text-base tracking-widest text-[#f5ebd2] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-              指挥面板
+        <div className="flex items-center space-x-3 pl-4 py-0.5">
+          <div className="flex items-center space-x-2 px-3 py-1.5 rounded bg-gradient-to-b from-[#1c222a] to-[#101418] border border-[#3f4a58] shadow-[inset_0_1px_3px_rgba(0,0,0,0.8),0_2px_4px_rgba(0,0,0,0.5)]">
+            <Shield className="w-4 h-4 text-amber-400 drop-shadow" />
+            <span className="font-serif font-black text-sm tracking-wider text-[#ffffff] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+              人生战略指挥部
             </span>
-            <span className="text-[10px] font-mono text-amber-400 font-semibold tracking-wider">
-              COMMAND PANEL
+            <span className="text-[10px] font-mono text-[#d4af37] font-semibold tracking-wider">
+              HQ COMMAND
             </span>
           </div>
 
-          {/* 核心真实战况指标：心智稳定度 */}
+          {/* 核心真实战况指标：心智稳定度 (HOI4 Status Badge) */}
           <button
             onClick={() => {
               soundFx.playClick();
               onOpenStabilityModal();
             }}
-            className="flex items-center space-x-2 px-3 py-1 rounded bg-[#101712] border border-[#2d3f32] hover:border-emerald-500 text-xs font-mono font-bold text-emerald-400 transition cursor-pointer shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]"
-            title="心智稳定度（点击调节与查看历史复盘记录）"
+            className="flex items-center space-x-2 px-3 py-1.5 rounded hoi4-pill-badge hover:border-[#5a677a] transition cursor-pointer"
+            title="心智稳定度（点击调节与查看历史战况推演）"
           >
-            <span>🛡️ 心智稳定度</span>
-            <span className="text-amber-300 font-sans text-sm font-black">{stabDisplay}</span>
+            <span className="text-xs font-serif text-[#ffffff] flex items-center space-x-1">
+              <span>🛡️ 稳定度</span>
+            </span>
+            <span className={`font-mono text-xs font-black ${stabColor}`}>
+              {stabDisplay}
+            </span>
           </button>
         </div>
 
-        {/* ===================== 右侧：机械拨动开关、档案切换与战略控制台 ===================== */}
+        {/* ===================== 右侧：机械音效调控、档案切换与战略控制台 ===================== */}
         <div className="flex items-center space-x-3 pr-4">
-          {/* 战役机械音效 3D 实体拨动开关 (Tactile Rocker Switch) */}
-          <div className="flex flex-col items-center bg-[#151b17] px-2.5 py-1 rounded border border-[#3b4c3e] shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]">
-            <span className="text-[9px] font-mono font-bold text-[#9bb09f] uppercase mb-0.5">
-              战役音效
-            </span>
-            <button
-              onClick={handleToggleSound}
-              className={`flex items-center rounded-sm p-0.5 transition cursor-pointer border ${
-                isSoundOn
-                  ? 'bg-gradient-to-r from-emerald-900 to-[#12281a] border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
-                  : 'bg-gradient-to-r from-[#291717] to-[#1a1010] border-rose-800'
-              }`}
-              title={isSoundOn ? '机械音效：开启 (ON) - 点击切为静音' : '机械音效：静音 (OFF) - 点击开启'}
-            >
-              <span
-                className={`px-1.5 py-0.5 text-[9px] font-mono font-black rounded transition ${
+          {/* 战役机械音效与音量调控 (Tactile Audio & Loud Volume Master Control) */}
+          <div className="relative" ref={volumePopupRef}>
+            <div className="flex items-center bg-[#13171c] p-0.5 rounded border border-[#323b47] shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]">
+              {/* 开关拨钮 */}
+              <button
+                type="button"
+                onClick={handleToggleSound}
+                className={`flex items-center space-x-1 px-2 py-1 rounded-xs transition cursor-pointer text-[10px] font-mono font-bold ${
                   isSoundOn
-                    ? 'bg-emerald-500 text-black shadow-sm font-bold'
-                    : 'text-slate-500'
+                    ? 'bg-gradient-to-r from-emerald-800 to-emerald-950 text-[#ffffff] border border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
+                    : 'bg-[#221818] text-[#94a3b8] hover:text-white border border-rose-900/60'
                 }`}
+                title={isSoundOn ? '战役机械音效：已开启（点击切换静音）' : '战役机械音效：已静音（点击开启）'}
               >
-                ON
-              </span>
-              <span
-                className={`px-1.5 py-0.5 text-[9px] font-mono font-black rounded transition ${
-                  !isSoundOn
-                    ? 'bg-rose-600 text-white shadow-sm font-bold'
-                    : 'text-slate-500'
-                }`}
+                {isSoundOn ? <Volume2 className="w-3 h-3 text-emerald-400" /> : <VolumeX className="w-3 h-3 text-rose-400" />}
+                <span>{isSoundOn ? '音效开' : '静音'}</span>
+              </button>
+
+              {/* 音量滑块调出按钮 */}
+              <button
+                type="button"
+                onClick={() => {
+                  soundFx.playClick();
+                  setShowVolumePopup(!showVolumePopup);
+                }}
+                className="px-1.5 py-1 text-[10px] font-mono font-bold text-[#e2e8f0] hover:text-[#ffffff] hover:bg-[#202731] rounded-xs transition flex items-center space-x-0.5"
+                title="调节战役音效主音量"
               >
-                OFF
-              </span>
-            </button>
+                <Sliders className="w-2.5 h-2.5 text-[#fbbf24]" />
+                <span>{volume}%</span>
+              </button>
+            </div>
+
+            {/* 音量调节浮层 */}
+            {showVolumePopup && (
+              <div className="absolute right-0 mt-2 w-48 p-3 rounded-lg hoi4-window z-50 animate-fadeIn border border-[#4a5666]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-serif font-bold text-[#ffffff]">战役总音量</span>
+                  <span className="text-xs font-mono font-bold text-[#fbbf24]">{volume}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={volume}
+                  onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                  className="w-full accent-amber-400 cursor-pointer mb-2"
+                />
+                <div className="flex justify-between items-center text-[10px] font-mono text-[#94a3b8]">
+                  <span>静音</span>
+                  <button
+                    type="button"
+                    onClick={() => handleVolumeChange(100)}
+                    className="text-[#fbbf24] hover:underline"
+                  >
+                    拉满 (100%)
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 空间机密档案切换器 */}
@@ -149,26 +225,28 @@ export const Header: React.FC<HeaderProps> = ({
                 soundFx.playClick();
                 setShowLifeMenu(!showLifeMenu);
               }}
-              className="flex items-center space-x-2 px-3 py-1.5 rounded bg-gradient-to-b from-[#2a2216] to-[#16120b] hover:from-[#352c1e] hover:to-[#1e1910] border border-[#a88944] text-xs text-[#f1ebdb] shadow-[0_2px_4px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.15)] transition group"
+              className="hoi4-btn-steel flex items-center space-x-2 px-3 py-1.5 rounded text-xs transition group"
             >
-              <span className="text-[10px] font-mono text-[#baa37b] uppercase">档案:</span>
-              <span className="font-serif font-bold text-amber-300 drop-shadow truncate max-w-[110px]">
+              <span className="text-[10px] font-mono text-[#94a3b8] uppercase">档案:</span>
+              <span className="font-serif font-bold text-[#fbbf24] truncate max-w-[110px]">
                 {currentLife?.name || '加载档案中...'}
               </span>
-              <span className="text-[10px] text-strategy-gold">▼</span>
+              <ChevronDown className="w-3 h-3 text-[#d4af37]" />
             </button>
 
             {showLifeMenu && (
-              <div className="absolute right-0 mt-1.5 w-64 bg-[#141b16] border-2 border-[#967b36] rounded shadow-[0_8px_24px_rgba(0,0,0,0.9)] py-1.5 z-50">
-                <div className="px-3 py-1 text-[11px] font-mono uppercase text-[#9bb09f] border-b border-[#29362c] flex items-center justify-between">
-                  <span>切换空间机密档案</span>
-                  <span className="text-[9px] text-strategy-gold font-bold">DOSSIERS</span>
+              <div className="absolute right-0 mt-1.5 w-64 hoi4-window rounded py-1.5 z-50 border-2 border-[#434e5c]">
+                <div className="px-3 py-1 text-[11px] font-mono uppercase text-[#94a3b8] border-b border-[#29323d] flex items-center justify-between">
+                  <span>切换人生空间战区</span>
+                  <span className="text-[9px] text-[#fbbf24] font-bold">DOSSIERS</span>
                 </div>
                 {lives.map((l) => (
                   <div
                     key={l.id}
-                    className={`group w-full px-3 py-2 text-sm flex items-center justify-between hover:bg-[#202b23] transition ${
-                      l.id === currentLife?.id ? 'text-amber-300 font-bold bg-[#1b251e] border-l-2 border-strategy-gold' : 'text-[#d6d0be]'
+                    className={`group w-full px-3 py-2 text-sm flex items-center justify-between hover:bg-[#202731] transition ${
+                      l.id === currentLife?.id
+                        ? 'text-[#fbbf24] font-bold bg-[#1b222a] border-l-2 border-[#d4af37]'
+                        : 'text-[#e2e8f0]'
                     }`}
                   >
                     <button
@@ -182,7 +260,7 @@ export const Header: React.FC<HeaderProps> = ({
                     >
                       <span className="truncate font-serif">{l.name}</span>
                       {l.id === currentLife?.id && (
-                        <span className="text-[10px] text-amber-300 shrink-0 ml-1.5 px-1.5 py-0.2 rounded bg-amber-950/80 border border-amber-700/80 font-mono tracking-wider">
+                        <span className="text-[10px] text-amber-300 shrink-0 ml-1.5 px-1.5 py-0.2 rounded bg-amber-950/80 border border-amber-600 font-mono tracking-wider">
                           ACTIVE
                         </span>
                       )}
@@ -192,7 +270,11 @@ export const Header: React.FC<HeaderProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (window.confirm(`确定要彻底删除人生空间「${l.name}」吗？\n\n警告：此操作将级联清空其下全部国策、特质、内阁和历史数据，彻底删档且不可恢复！`)) {
+                          if (
+                            window.confirm(
+                              `确定要彻底删除人生空间「${l.name}」吗？\n\n警告：此操作将级联清空其下全部国策、特质、内阁和历史数据，彻底删档且不可恢复！`
+                            )
+                          ) {
                             onDeleteLife(l.id);
                             setShowLifeMenu(false);
                           }
@@ -205,16 +287,16 @@ export const Header: React.FC<HeaderProps> = ({
                     )}
                   </div>
                 ))}
-                <div className="border-t border-[#29362c] mt-1 pt-1">
+                <div className="border-t border-[#29323d] mt-1 pt-1">
                   <button
                     onClick={() => {
                       soundFx.playClick();
                       setShowLifeMenu(false);
                       setShowCreateModal(true);
                     }}
-                    className="w-full text-left px-3 py-2 text-xs font-serif font-semibold text-strategy-gold hover:bg-[#202b23] flex items-center space-x-2"
+                    className="w-full text-left px-3 py-2 text-xs font-serif font-semibold text-[#fbbf24] hover:bg-[#202731] flex items-center space-x-2"
                   >
-                    <Plus className="w-4 h-4 text-strategy-gold" />
+                    <Plus className="w-4 h-4 text-[#fbbf24]" />
                     <span>开辟新人生命运空间 (NEW THEATER)</span>
                   </button>
                 </div>
@@ -228,17 +310,17 @@ export const Header: React.FC<HeaderProps> = ({
               soundFx.playClick();
               onOpenSettingsModal();
             }}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-gradient-to-b from-[#242d27] to-[#151c17] hover:from-[#2e3a32] hover:to-[#1a231d] text-[#e7e0cc] border border-[#485b4c] text-xs font-mono tracking-wider transition shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+            className="hoi4-btn-steel flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-mono tracking-wider transition"
             title="统帅战略控制台：模型设置、删档重开与数据导出"
           >
-            <Settings className="w-3.5 h-3.5 text-strategy-gold" />
-            <span className="font-bold">控制台</span>
+            <Settings className="w-3.5 h-3.5 text-[#fbbf24]" />
+            <span className="font-bold text-[#ffffff]">控制台</span>
           </button>
         </div>
       </div>
 
-      {/* 军事战役下沉凹槽导航标签栏 (Recessed Metal Military Plaque Tabs) */}
-      <div className="brass-recessed-chassis px-4 py-1 flex items-center space-x-1.5 overflow-x-auto">
+      {/* 军事战役下沉凹槽导航标签栏 (HOI4 Beveled Steel Tabs Bar) */}
+      <div className="px-4 py-1.5 flex items-center space-x-2 overflow-x-auto bg-[#13161a] border-t border-[#242b33]">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -251,17 +333,25 @@ export const Header: React.FC<HeaderProps> = ({
               }}
               className={`flex flex-col items-center px-4 py-1.5 rounded transition whitespace-nowrap cursor-pointer ${
                 isActive
-                  ? 'btn-console-tab-active scale-[1.02]'
-                  : 'btn-console-tab-inactive'
+                  ? 'hoi4-btn-steel-active scale-[1.02] border-b-2 border-b-[#d4af37]'
+                  : 'hoi4-btn-steel hover:text-white'
               }`}
             >
               <div className="flex items-center space-x-1.5">
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-[#3b2b0a]' : 'text-[#8b9b8f]'}`} />
-                <span className="text-xs font-serif font-bold tracking-wide">
+                <Icon
+                  className={`w-3.5 h-3.5 ${
+                    isActive ? 'text-[#fbbf24]' : 'text-[#94a3b8]'
+                  }`}
+                />
+                <span className="text-xs font-serif font-bold tracking-wide text-[#ffffff]">
                   {item.label}
                 </span>
               </div>
-              <span className={`text-[8px] font-mono tracking-widest uppercase ${isActive ? 'text-[#5a4212] font-extrabold' : 'text-[#55665a]'}`}>
+              <span
+                className={`text-[8px] font-mono tracking-widest uppercase ${
+                  isActive ? 'text-[#fbbf24] font-extrabold' : 'text-[#64748b]'
+                }`}
+              >
                 {item.sub}
               </span>
             </button>
@@ -269,21 +359,24 @@ export const Header: React.FC<HeaderProps> = ({
         })}
       </div>
 
-      {/* 新建空间弹窗 */}
+      {/* 新建空间战区弹窗 (HOI4 Heavy Gunmetal Window) */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="manila-paper p-6 rounded shadow-2xl w-full max-w-md relative border-2 border-[#967b36]">
+          <div className="hoi4-window p-6 rounded-lg shadow-2xl w-full max-w-md relative border-2 border-[#4a5768]">
             <div className="absolute top-2 right-2 screw-rivet" />
             <div className="absolute top-2 left-2 screw-rivet" />
-            <div className="distressed-stamp-red absolute right-6 top-5 text-[10px] px-2 py-0.5">
-              CONFIDENTIAL
+            <div className="absolute bottom-2 right-2 screw-rivet" />
+            <div className="absolute bottom-2 left-2 screw-rivet" />
+
+            <div className="inline-block bg-rose-950/80 border border-rose-600 text-rose-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase tracking-wider mb-2">
+              CONFIDENTIAL · 战区建档
             </div>
 
-            <h3 className="text-lg font-serif font-bold text-[#2d2212] mb-1 flex items-center space-x-2">
-              <Plus className="w-5 h-5 text-[#886526]" />
+            <h3 className="text-lg font-serif font-bold text-[#ffffff] mb-1 flex items-center space-x-2">
+              <Plus className="w-5 h-5 text-[#fbbf24]" />
               <span>建立全新人生空间战区 (NEW THEATER)</span>
             </h3>
-            <p className="text-xs text-[#5f5139] mb-4 font-serif leading-relaxed">
+            <p className="text-xs text-[#cbd5e1] mb-4 font-serif leading-relaxed">
               每个空间拥有完全独立的战役国策沙盘、活跃特质勋章、内阁参谋推演和历史快照，彼此严格隔离。
             </p>
             <form onSubmit={handleCreateSubmit}>
@@ -293,20 +386,20 @@ export const Header: React.FC<HeaderProps> = ({
                 placeholder="例如：主线人生战役、商业版图、学术高峰..."
                 value={newLifeName}
                 onChange={(e) => setNewLifeName(e.target.value)}
-                className="w-full bg-[#f6efe1] border-2 border-[#b3a078] rounded px-3 py-2 text-sm text-[#2b2318] placeholder-[#9a8d73] focus:outline-none focus:border-[#82662c] mb-4 font-serif font-semibold"
+                className="w-full hoi4-inset-panel px-3 py-2 text-sm text-[#ffffff] placeholder-[#64748b] focus:outline-none focus:border-[#fbbf24] mb-4 font-serif font-semibold rounded"
               />
               <div className="flex justify-end space-x-3">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-1.5 text-xs font-mono rounded bg-[#d6c7ab] hover:bg-[#c9b898] text-[#3d3221] border border-[#a4916a]"
+                  className="hoi4-btn-steel px-4 py-1.5 text-xs font-mono rounded text-[#e2e8f0]"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
                   disabled={!newLifeName.trim()}
-                  className="px-4 py-1.5 text-xs font-serif font-bold rounded bg-gradient-to-r from-amber-700 to-yellow-600 hover:from-amber-600 hover:to-yellow-500 text-white shadow-md disabled:opacity-50"
+                  className="hoi4-btn-military px-5 py-1.5 text-xs font-serif font-bold rounded disabled:opacity-50"
                 >
                   确认建立档案
                 </button>

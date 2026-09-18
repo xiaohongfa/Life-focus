@@ -26,16 +26,13 @@ import {
   Sparkles,
   X,
   Trash2,
-  History,
-  GitBranch,
   ShieldAlert,
   RotateCcw,
   Save,
-  Check,
   ArrowRight,
-  ShieldMinus,
   ListTodo,
   Maximize2,
+  Coins,
 } from 'lucide-react';
 import {
   generateNextFocusProposals,
@@ -188,18 +185,19 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
             targetHandle: isMutual ? 'target-left' : 'target-top',
             animated: isMutual,
             style: {
-              stroke: isMutual ? '#991b1b' : '#5c482e',
+              stroke: isMutual ? '#ef4444' : '#64748b',
               strokeWidth: isMutual ? 2.5 : 2,
-              strokeDasharray: '6,6',
+              strokeDasharray: isMutual ? '6,6' : undefined,
             },
-            label: isMutual ? '互斥路线' : undefined,
-            labelStyle: { fill: '#ef4444', fontSize: 10, fontWeight: 'bold' },
-            labelBgStyle: { fill: '#1a1309', fillOpacity: 0.85 },
+            label: isMutual ? '< ! >' : undefined,
+            labelStyle: { fill: '#f87171', fontSize: 11, fontWeight: '900', fontFamily: 'monospace' },
+            labelBgStyle: { fill: '#181b20', fillOpacity: 0.95, rx: 3, stroke: '#ef4444', strokeWidth: 1.5 },
+            labelBgPadding: [6, 3] as [number, number],
             markerEnd: isMutual
               ? undefined
               : {
                   type: MarkerType.ArrowClosed,
-                  color: '#735b31',
+                  color: '#94a3b8',
                   width: 14,
                   height: 14,
                 },
@@ -381,7 +379,9 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
     const oldStatus = selectedFocus.status;
     try {
       if (targetStatus === 'completed') {
-        soundFx.playStamp();
+        soundFx.playFocusComplete();
+      } else if (targetStatus === 'active') {
+        soundFx.playFocusStart();
       } else if (targetStatus === 'revoked') {
         soundFx.playVoid();
       } else {
@@ -444,24 +444,6 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
       console.error('Failed to delete focus', err);
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`撤除国策失败: ${msg}`);
-    }
-  };
-
-  // 关系一键解绑
-  const handleDeleteRelation = async (relId: string) => {
-    const rel = relations.find((r) => r.id === relId);
-    if (!rel) return;
-    try {
-      await api.deleteFocusRelation(lifeId, relId);
-      const nextRels = relations.filter((r) => r.id !== relId);
-      setRelations(nextRels);
-      syncEdgesFromRelations(nextRels);
-      setUndoStack((prev) => [...prev, { type: 'DELETE_RELATION', relation: rel }]);
-      toast.info('路线联系已解绑');
-    } catch (err: unknown) {
-      console.error('Failed to delete relation', err);
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(`解绑路线联系失败: ${msg}`);
     }
   };
 
@@ -733,10 +715,6 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
     return relations.filter((r) => r.target_focus_id === selectedFocus.id && r.relation_type === 'prerequisite');
   }, [relations, selectedFocus]);
 
-  const currentOutgoing = useMemo(() => {
-    if (!selectedFocus) return [];
-    return relations.filter((r) => r.source_focus_id === selectedFocus.id && r.relation_type === 'prerequisite');
-  }, [relations, selectedFocus]);
 
   const currentMutuallyExclusive = useMemo(() => {
     if (!selectedFocus) return [];
@@ -748,33 +726,41 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
   }, [relations, selectedFocus]);
 
   return (
-    <div className="relative w-full h-[calc(100vh-80px)] parchment-map overflow-hidden flex select-none border-t-2 border-[#3d2f14]">
-      {/* 战役发展路线图顶部羊皮纸铭文水印 (Life Development Roadmap Header) */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center pointer-events-none opacity-85">
+    <div className="relative w-full h-[calc(100vh-80px)] bg-[#121518] overflow-hidden flex flex-col select-none border-t-2 border-[#2b333c]">
+      {/* 1. HOI4 原生顶部工业铁轨人字防滑饰条 (Top Chevron Girder Bar matching HOI4 Image 4) */}
+      <div className="hoi4-canvas-girder w-full shrink-0 flex items-center justify-between px-6 z-10 select-none">
         <div className="flex items-center space-x-3">
-          <div className="h-px w-20 bg-[#8a724d]" />
-          <div className="w-2.5 h-2.5 rotate-45 border border-[#8a724d] bg-[#d5c6aa]" />
-          <h2 className="font-serif font-black text-xl tracking-widest text-[#3d2f19] drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]">
-            人生发展路线图
-          </h2>
-          <div className="w-2.5 h-2.5 rotate-45 border border-[#8a724d] bg-[#d5c6aa]" />
-          <div className="h-px w-20 bg-[#8a724d]" />
+          <div className="screw-rivet" />
+          <span className="font-mono text-[11px] uppercase tracking-widest text-[#cbd5e1] font-bold">
+            NATIONAL FOCUS TREE · 战略国策树
+          </span>
+          <div className="screw-rivet" />
         </div>
-        <span className="text-[10px] font-mono tracking-widest uppercase text-[#735e3b] font-black mt-0.5">
-          LIFE DEVELOPMENT ROADMAP
-        </span>
+
+        <div className="flex items-center space-x-4 text-xs font-mono">
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[#94a3b8]">已达成战略:</span>
+            <span className="text-amber-300 font-bold text-sm">
+              {foci.filter((f) => f.status === 'completed').length}
+            </span>
+          </div>
+          <span className="text-slate-600">|</span>
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[#94a3b8]">执行推进中:</span>
+            <span className="text-emerald-400 font-bold text-sm">
+              {foci.filter((f) => f.status === 'active').length}
+            </span>
+          </div>
+          <span className="text-slate-600">|</span>
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[#94a3b8]">战略总谱:</span>
+            <span className="text-[#f8fafc] font-bold">{foci.length} 项</span>
+          </div>
+        </div>
       </div>
 
-      {/* 战略沙盘角落真实绝密火漆印章 */}
-      <div className="distressed-stamp-red absolute top-5 right-8 text-xs px-2.5 py-1 pointer-events-none opacity-75 z-10">
-        绝密 256
-      </div>
-      <div className="distressed-stamp-red absolute bottom-6 left-8 text-[11px] px-2.5 py-1 pointer-events-none opacity-60 z-10">
-        TOP SECRET 绝密 256
-      </div>
-
-      {/* React Flow 2D Canvas */}
-      <div className="flex-1 h-full">
+      {/* 2. React Flow 2D Canvas (深钢冷铸铁暗色网格沙盘) */}
+      <div className="flex-1 h-full relative">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -803,442 +789,429 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
           nodesDraggable={true}
           preventScrolling={false}
         >
-          <Background color="#6b5333" gap={36} size={1.2} style={{ opacity: 0.16 }} />
-          <Controls className="!bg-[#151c17] !border-2 !border-[#967b36] !text-[#e7e0cc] !rounded-sm shadow-xl" position="bottom-left" />
+          <Background color="#475569" gap={32} size={1} style={{ opacity: 0.16 }} />
+          <Controls
+            className="!bg-[#1a1e23] !border-2 !border-[#3d4652] !text-[#f8fafc] !rounded-sm shadow-2xl"
+            position="bottom-left"
+          />
           <MiniMap
-            nodeColor="#8a6c37"
-            maskColor="rgba(43, 34, 21, 0.75)"
-            className="!bg-[#e8decb] !border-2 !border-[#8a6c37] !rounded-sm opacity-90 hover:opacity-100 transition shadow-2xl"
+            nodeColor="#d4af37"
+            maskColor="rgba(18, 21, 24, 0.85)"
+            className="!bg-[#14171a] !border-2 !border-[#3d4652] !rounded-sm opacity-90 hover:opacity-100 transition shadow-2xl"
             position="bottom-left"
             style={{ marginLeft: 50, width: 140, height: 90 }}
           />
         </ReactFlow>
-      </div>
 
-      {/* Floating Canvas Top Action Bar (战区战略控制台) */}
-      <div className="absolute top-4 left-4 z-20 flex items-center space-x-3 tactical-panel border-2 border-[#967b36] px-4 py-2 rounded-sm shadow-[0_8px_30px_rgba(0,0,0,0.85)]">
-        <div className="absolute top-1 left-1.5 screw-rivet" />
-        <div className="absolute top-1 right-1.5 screw-rivet" />
-
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-sm bg-gradient-to-r from-[#d4af37] to-[#f7e192] hover:from-[#c59e2a] hover:to-[#ebcf77] text-black font-serif font-bold text-xs transition shadow-md"
-        >
-          <Plus className="w-4 h-4 text-black" />
-          <span>制定新国策</span>
-        </button>
-
-        <button
-          onClick={handleOpenAiInitialLine}
-          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-sm bg-[#221a10] hover:bg-[#2d2214] border border-[#a38237] text-strategy-gold font-mono font-bold text-xs transition shadow"
-          title="输入定制需求让 AI 启发全新战略攻坚主线"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-strategy-gold" />
-          <span>AI 启发战略主线</span>
-        </button>
-
-        {/* Connection Mode Selector (§7.3) */}
-        <div className="flex items-center space-x-1 bg-[#121814] p-1 rounded-sm border border-[#2d3a30]">
-          <span className="text-[11px] font-mono text-[#8b9b8f] px-1.5">战线类型:</span>
+        {/* Floating Canvas Top Action Bar (HOI4 沉浸式战区控制台) */}
+        <div className="absolute top-4 left-4 z-20 flex items-center space-x-2.5 hoi4-window px-4 py-2 rounded shadow-[0_8px_30px_rgba(0,0,0,0.9)]">
           <button
-            onClick={() => setConnectionMode('prerequisite')}
-            className={`px-2.5 py-1 text-xs font-serif rounded-sm font-bold transition ${
-              connectionMode === 'prerequisite'
-                ? 'bg-[#cfa847] text-black shadow-sm'
-                : 'text-[#8b9b8f] hover:text-[#e7e0cc]'
-            }`}
+            onClick={() => setShowCreateModal(true)}
+            className="hoi4-btn-military flex items-center space-x-1.5 px-3 py-1.5 rounded-sm text-xs font-bold transition shadow-md"
           >
-            前置承接路线
+            <Plus className="w-4 h-4 text-white" />
+            <span>制定新国策</span>
           </button>
+
           <button
-            onClick={() => setConnectionMode('mutually_exclusive')}
-            className={`px-2.5 py-1 text-xs font-serif rounded-sm font-bold transition ${
-              connectionMode === 'mutually_exclusive'
-                ? 'bg-rose-700 text-white shadow-sm'
-                : 'text-[#8b9b8f] hover:text-[#e7e0cc]'
-            }`}
+            onClick={handleOpenAiInitialLine}
+            className="hoi4-btn-steel flex items-center space-x-1.5 px-3 py-1.5 rounded-sm text-xs font-bold transition shadow"
+            title="输入定制需求让 AI 启发全新战略攻坚主线"
           >
-            互斥抉择战线
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>AI 启发战略主线</span>
+          </button>
+
+          {/* Connection Mode Selector (§7.3: 前置路线 vs 互斥路线切换) */}
+          <div className="flex items-center space-x-1 bg-[#101316] p-1 rounded-sm border border-[#2b333c]">
+            <span className="text-[11px] font-mono text-[#94a3b8] px-1.5 font-bold">连线模式:</span>
+            <button
+              onClick={() => setConnectionMode('prerequisite')}
+              className={`px-2.5 py-1 text-xs rounded-sm font-bold transition ${
+                connectionMode === 'prerequisite'
+                  ? 'bg-[#d4af37] text-black shadow-sm'
+                  : 'text-[#94a3b8] hover:text-[#f8fafc]'
+              }`}
+            >
+              前置路线
+            </button>
+            <button
+              onClick={() => setConnectionMode('mutually_exclusive')}
+              className={`px-2.5 py-1 text-xs rounded-sm font-bold transition ${
+                connectionMode === 'mutually_exclusive'
+                  ? 'bg-rose-700 text-white shadow-sm'
+                  : 'text-[#94a3b8] hover:text-[#f8fafc]'
+              }`}
+            >
+              互斥路线 &lt; ! &gt;
+            </button>
+          </div>
+
+          {/* Undo Button */}
+          <button
+            onClick={handleUndo}
+            disabled={undoStack.length === 0}
+            className="hoi4-btn-steel flex items-center space-x-1 px-3 py-1.5 disabled:opacity-40 rounded-sm text-xs font-mono transition"
+            title="撤销最近移动或操作 (Ctrl+Z)"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>撤销 {undoStack.length > 0 ? `(${undoStack.length})` : ''}</span>
+          </button>
+
+          {/* Manual Fit View Button */}
+          <button
+            onClick={() => reactFlowInstanceRef.current?.fitView({ padding: 0.3, maxZoom: 1.2, duration: 300 })}
+            className="hoi4-btn-steel flex items-center space-x-1 px-2.5 py-1.5 rounded-sm text-xs font-semibold transition shadow-sm text-amber-300"
+            title="将所有国策自适应居中到视口中央"
+          >
+            <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
+            <span>沙盘复位</span>
           </button>
         </div>
-
-        {/* Undo Button */}
-        <button
-          onClick={handleUndo}
-          disabled={undoStack.length === 0}
-          className="flex items-center space-x-1 px-3 py-1.5 bg-[#1a231d] hover:bg-[#253229] disabled:opacity-40 disabled:hover:bg-[#1a231d] text-[#e7e0cc] border border-[#38483c] rounded-sm text-xs font-mono transition"
-          title="撤销最近移动或操作 (Ctrl+Z)"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>撤销 {undoStack.length > 0 ? `(${undoStack.length})` : ''}</span>
-        </button>
-
-        {/* Manual Fit View Button */}
-        <button
-          onClick={() => reactFlowInstanceRef.current?.fitView({ padding: 0.3, maxZoom: 1.2, duration: 300 })}
-          className="flex items-center space-x-1 px-2.5 py-1.5 bg-[#1a231d] hover:bg-[#253229] text-[#e7e0cc] border border-[#38483c] rounded-sm text-xs font-serif font-semibold transition shadow-sm"
-          title="将所有国策自适应居中到视口中央"
-        >
-          <Maximize2 className="w-3.5 h-3.5 text-strategy-gold" />
-          <span>沙盘复位</span>
-        </button>
       </div>
 
-      {/* Right Detail / Drawer Panel (绝密作战指令 Manila 档案纸板) */}
+      {/* 3. HOI4 原生国策详情大弹窗 (严格复刻素材图 3 media_1789656055585.png) */}
       {selectedFocus && (
-        <div className="w-96 h-full manila-paper border-l-4 border-[#8c6f31] p-5 flex flex-col z-20 shadow-[0_0_35px_rgba(0,0,0,0.9)] overflow-y-auto space-y-4 relative text-[#2b2214]">
-          <div className="flex items-center justify-between border-b-2 border-[#b39f76] pb-3">
-            <div className="flex items-center space-x-2">
-              <GitBranch className="w-4 h-4 text-[#8a6b29]" />
-              <h4 className="font-serif font-black text-sm text-[#2d2212]">
-                国策战役档案与调令
-              </h4>
-              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-rose-950/80 text-rose-200 border border-rose-800 font-bold">
-                DOSSIER
-              </span>
-            </div>
-            <button
-              onClick={() => setSelectedFocus(null)}
-              className="text-[#6d5b3d] hover:text-black transition p-1"
-            >
-            </button>
-          </div>
-
-          {/* Tactical Status Stamp Ribbon (具有解压实体印章动效与明确作战状态) */}
-          {selectedFocus.status === 'completed' && (
-            <div className="py-2.5 px-3 bg-[#1c180d] border border-[#d4af37]/40 rounded-sm flex items-center justify-center">
-              <div
-                key={`stamp-${selectedFocus.id}-${selectedFocus.status}`}
-                className="stamp-gold-order animate-stamp-slam text-xs font-black border-2 border-[#d4af37] px-3 py-1 shadow-[0_0_15px_rgba(212,175,55,0.4)]"
-              >
-                ★ 战略决议达成 · STRATEGY APPROVED ★
-              </div>
-            </div>
-          )}
-          {selectedFocus.status === 'revoked' && (
-            <div className="py-2.5 px-3 bg-[#241212] border border-rose-800/40 rounded-sm flex items-center justify-center">
-              <div
-                key={`stamp-${selectedFocus.id}-${selectedFocus.status}`}
-                className="stamp-top-secret animate-stamp-slam text-xs font-black border-2 border-rose-600 px-3 py-1 text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.3)]"
-              >
-                ✕ 战略调令中止 · VOID DIRECTIVE ✕
-              </div>
-            </div>
-          )}
-          {selectedFocus.status === 'active' && (
-            <div className="py-2 px-3 bg-[#111c15] border border-emerald-500/40 rounded-sm flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="hoi4-window w-full max-w-xl rounded shadow-[0_20px_60px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col border-2 border-[#3e4754] text-[#ffffff] animate-in fade-in zoom-in-95 duration-150">
+            {/* 顶部标题栏：居中大写标题 + 金属铆钉 + 右上角铜质十字叉关闭按钮 (素材图 3 顶部) */}
+            <div className="hoi4-header-bar px-4 py-2.5 flex items-center justify-between relative select-none">
               <div className="flex items-center space-x-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                <span className="w-2 h-2 rounded-full bg-[#caa858] border border-[#1a1d22] shadow-inner" />
+                <span className="font-sans font-bold text-[10.5px] uppercase tracking-wider text-[#94a3b8]">
+                  NATIONAL FOCUS
                 </span>
-                <span className="text-xs font-mono font-bold text-emerald-400">战略战役主攻中 · ACTIVE CAMPAIGN</span>
               </div>
-              <span className="text-[10px] font-mono text-emerald-500/80">IN PROGRESS</span>
-            </div>
-          )}
-          {selectedFocus.status === 'paused' && (
-            <div className="py-2 px-3 bg-[#1e170e] border border-amber-600/40 rounded-sm flex items-center justify-between">
-              <span className="text-xs font-mono font-bold text-amber-400">⏳ 战线战略休整 · STRATEGIC PAUSE</span>
-              <span className="text-[10px] font-mono text-amber-500/80">STANDBY</span>
-            </div>
-          )}
 
-          {/* Editable Title & Body Markdown */}
-          <div className="space-y-3 dossier-card p-3.5 rounded-sm border border-[#334237]">
-            <div>
-              <label className="block text-[11px] font-mono font-bold text-[#8b9b8f] mb-1">国策番号与主标题</label>
-              <input
-                type="text"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="w-full bg-[#0d120f] border border-[#3d4f42] rounded px-2.5 py-1 text-sm font-serif font-bold text-amber-300 focus:outline-none focus:border-strategy-gold"
-              />
+              {/* 居中加大纯白标题：字体高对比度，清晰易读 */}
+              <h3 className="font-serif font-black text-sm uppercase tracking-widest text-[#ffffff] text-center drop-shadow-[0_1px_2px_rgba(0,0,0,1)] truncate max-w-md px-2">
+                {selectedFocus.title}
+              </h3>
+
+              {/* 右上角方形古铜十字叉关闭按钮 */}
+              <button
+                onClick={() => setSelectedFocus(null)}
+                className="hoi4-close-btn rounded-xs shrink-0"
+                title="关闭 (Esc)"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <div>
-              <label className="block text-[11px] font-mono font-bold text-[#8b9b8f] mb-1">战略内涵与行动纲领 (MARKDOWN)</label>
-              <MarkdownEditor
-                value={editBodyMd}
-                onChange={(val) => setEditBodyMd(val)}
-                placeholder="在此阐述该国策的战略内涵与具体攻坚方向..."
-                defaultMode="preview"
-                minHeight="120px"
-                rows={4}
-              />
-            </div>
-
-            <div className="flex items-center justify-between pt-1">
-              <div className="text-[11px] font-mono">
-                {saveStatus === 'saving' && <span className="text-amber-400 animate-pulse">正在存盘...</span>}
-                {saveStatus === 'saved' && (
-                  <span className="text-emerald-400 flex items-center space-x-0.5">
-                    <Check className="w-3 h-3" />
-                    <span>档案已保存</span>
+            <div className="p-4 space-y-3.5 bg-[#14171a]">
+              {/* 顶部操作行：胶囊天数框 + 军绿战备推进大按钮 (素材图 3 顶部：35 days + Start) */}
+              <div className="flex items-center justify-between pb-1">
+                {/* 35 days 胶囊框 */}
+                <div className="hoi4-pill-badge px-6 py-1 text-xs font-mono font-bold tracking-wider flex items-center space-x-2">
+                  <span>
+                    {selectedFocus.status === 'completed'
+                      ? '战略达成 (ACHIEVED)'
+                      : selectedFocus.status === 'active'
+                      ? '35 天 · 进行中 (35 DAYS)'
+                      : selectedFocus.status === 'paused'
+                      ? '战略休整中 (STANDBY)'
+                      : '战略中止 (VOID)'}
                   </span>
+                </div>
+
+                {/* 军工橄榄绿主动作按钮 (Start / Complete / Standby) */}
+                <div className="flex items-center space-x-2">
+                  {selectedFocus.status !== 'completed' ? (
+                    <button
+                      onClick={() => handleStatusChange('completed')}
+                      className="hoi4-btn-military px-5 py-1.5 rounded-sm text-xs font-serif font-bold flex items-center space-x-1.5"
+                      title="完成并达成此战略国策"
+                    >
+                      <span>达成战略 (Complete)</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleStatusChange('active')}
+                      className="hoi4-btn-steel px-4 py-1.5 rounded-sm text-xs font-serif font-bold text-emerald-300"
+                      title="重置回进行中状态"
+                    >
+                      <span>重新推进 (Start)</span>
+                    </button>
+                  )}
+
+                  {selectedFocus.status === 'active' ? (
+                    <button
+                      onClick={() => handleStatusChange('paused')}
+                      className="hoi4-btn-steel px-3 py-1.5 rounded-sm text-xs font-serif font-bold text-amber-300"
+                      title="将国策挂起休整"
+                    >
+                      <span>休整</span>
+                    </button>
+                  ) : selectedFocus.status === 'paused' ? (
+                    <button
+                      onClick={() => handleStatusChange('active')}
+                      className="hoi4-btn-military px-4 py-1.5 rounded-sm text-xs font-serif font-bold"
+                      title="恢复进行此国策"
+                    >
+                      <span>恢复推进</span>
+                    </button>
+                  ) : null}
+
+                  {selectedFocus.status !== 'revoked' && (
+                    <button
+                      onClick={() => handleStatusChange('revoked')}
+                      className="px-2.5 py-1.5 rounded-sm bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-mono font-bold"
+                      title="作废中止此国策"
+                    >
+                      <span>作废</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 中间核心区：左侧月桂花环大徽章 + 右侧暗纹凹槽条件要求面板 (素材图 3 中间) */}
+              <div className="grid grid-cols-12 gap-3 items-center">
+                {/* 左侧：3D 金属月桂花环徽章 */}
+                <div className="col-span-4 flex flex-col items-center justify-center p-2">
+                  <div className="relative flex items-center justify-center">
+                    <svg viewBox="0 0 100 100" className="w-24 h-24 drop-shadow-[0_4px_10px_rgba(0,0,0,0.9)]">
+                      <path
+                        d="M 50 90 C 25 86 10 65 14 42 C 16 30 26 18 38 12 C 34 20 33 30 38 38 C 30 34 22 44 26 54 C 22 58 24 70 34 76 C 38 78 44 84 50 90 Z"
+                        fill="url(#goldGradModal)"
+                        stroke="#261b05"
+                        strokeWidth="1"
+                      />
+                      <path
+                        d="M 50 90 C 75 86 90 65 86 42 C 84 30 74 18 62 12 C 66 20 67 30 62 38 C 70 34 78 44 74 54 C 78 58 76 70 66 76 C 62 78 56 84 50 90 Z"
+                        fill="url(#goldGradModal)"
+                        stroke="#261b05"
+                        strokeWidth="1"
+                      />
+                      <circle cx="50" cy="88" r="4.5" fill="#f59e0b" stroke="#3b2605" strokeWidth="1" />
+                      <defs>
+                        <linearGradient id="goldGradModal" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#fff8db" />
+                          <stop offset="35%" stopColor="#f5c742" />
+                          <stop offset="70%" stopColor="#b8861b" />
+                          <stop offset="100%" stopColor="#634509" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <div className="absolute w-14 h-14 rounded-full bg-gradient-to-br from-[#261f10] via-[#161208] to-[#0a0804] border-2 border-[#d4af37] shadow-[inset_0_3px_6px_rgba(0,0,0,0.9),0_2px_4px_rgba(0,0,0,0.8)] flex items-center justify-center">
+                      <Coins className="w-7 h-7 text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" />
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-[#94a3b8] mt-1.5">
+                    战略标志徽记
+                  </span>
+                </div>
+
+                {/* 右侧：HOI4 暗纹凹槽条件清单 (绿色勾选框 + 金黄色修饰词高亮) */}
+                <div className="col-span-8 hoi4-inset-panel p-3 rounded-sm min-h-[110px] flex flex-col justify-center space-y-2 text-xs font-sans">
+                  {/* 前置需求 */}
+                  <div className="flex items-start space-x-2">
+                    <span className="text-emerald-400 font-bold">✔</span>
+                    <span className="text-[#d1d5db]">
+                      {currentIncoming.length === 0 ? (
+                        <span>
+                          前置战略需求：
+                          <strong className="text-[#fef08a] font-bold">无前置依赖条件 (起点根基)</strong>
+                        </span>
+                      ) : (
+                        <span>
+                          前置战略需求：
+                          {currentIncoming.map((r, i) => {
+                            const src = foci.find((f) => f.id === r.source_focus_id);
+                            return (
+                              <span key={r.id} className="text-[#fbbf24] font-bold">
+                                {i > 0 ? '、' : ' '}
+                                {src?.title || '未知国策'}
+                              </span>
+                            );
+                          })}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* 互斥警告 (Mutually exclusive with...) */}
+                  {currentMutuallyExclusive.length > 0 ? (
+                    <div className="flex items-start space-x-2 text-rose-400">
+                      <span className="font-bold text-amber-400">⚠️</span>
+                      <span>
+                        互斥排他战线：
+                        {currentMutuallyExclusive.map((r, i) => {
+                          const otherId =
+                            r.source_focus_id === selectedFocus.id ? r.target_focus_id : r.source_focus_id;
+                          const other = foci.find((f) => f.id === otherId);
+                          return (
+                            <strong key={r.id} className="text-[#fbbf24] font-bold underline ml-1">
+                              {i > 0 ? '、' : ''}
+                              {other?.title || '未知国策'}
+                            </strong>
+                          );
+                        })}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2 text-[#94a3b8]">
+                      <span className="text-emerald-400 font-bold">✔</span>
+                      <span>无互斥冲突路线</span>
+                    </div>
+                  )}
+
+                  {/* 拆解步骤徽章 */}
+                  <div className="flex items-center justify-between pt-1 border-t border-[#252c36]">
+                    <span className="text-[#94a3b8] text-[11px] font-mono">战役执行拆解步骤:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubFocusModalTarget(selectedFocus);
+                        setIsSubFocusModalOpen(true);
+                      }}
+                      className="text-[11px] text-[#fbbf24] hover:underline font-mono font-bold flex items-center space-x-1"
+                    >
+                      <span>
+                        {subCounts[selectedFocus.id]?.done || 0} / {subCounts[selectedFocus.id]?.total || 0} 步骤已推进
+                      </span>
+                      <span className="text-xs">↗</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 底部战略意图与描述区：纯白高对比度文字 (严格解决文字可读性问题) */}
+              <div className="hoi4-inset-panel p-3.5 rounded-sm space-y-2">
+                <div className="flex items-center justify-between pb-1 border-b border-[#252c36]">
+                  <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-[#94a3b8]">
+                    STRATEGIC DOCTRINE & FLAVOR (战略内涵与行动意图)
+                  </span>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={handleOpenAiRefineBody}
+                      className="text-[11px] font-mono text-[#fbbf24] hover:text-[#fef08a] flex items-center space-x-1 transition"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>AI 参谋润色</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveNodeContent}
+                      disabled={saveStatus === 'saving'}
+                      className="text-[11px] font-mono text-emerald-400 hover:text-emerald-300 flex items-center space-x-1 disabled:opacity-50"
+                    >
+                      <Save className="w-3 h-3" />
+                      <span>{saveStatus === 'saved' ? '已保存' : saveStatus === 'saving' ? '保存中...' : '保存修改'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 高对比度纯白正文 */}
+                <div className="text-xs leading-relaxed text-[#ffffff] max-h-36 overflow-y-auto pr-1 font-sans">
+                  <MarkdownEditor
+                    value={editBodyMd}
+                    onChange={(val) => setEditBodyMd(val)}
+                    placeholder="在此详细叙述该国策的战略内涵、推进步骤与历史意图..."
+                    defaultMode="preview"
+                    minHeight="90px"
+                    rows={3}
+                  />
+                </div>
+
+                {focusHistory.length > 0 && (
+                  <div className="pt-2 border-t border-[#29323e] text-[10px] font-mono text-[#94a3b8] flex items-center space-x-2">
+                    <span>状态演进记录: {focusHistory.length} 条</span>
+                    <span className="text-[#64748b]">
+                      (最新: {focusHistory[0]?.to_status} · {focusHistory[0]?.recorded_at?.slice(0, 10)})
+                    </span>
+                  </div>
                 )}
               </div>
-              <div className="flex items-center space-x-2">
+
+              {/* 底部辅助操作区 */}
+              <div className="flex items-center justify-between pt-1 text-xs">
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleOpenAiNextNode}
+                    className="hoi4-btn-steel px-3 py-1.5 rounded-sm flex items-center space-x-1 text-amber-300"
+                    title="根据当前战局定制推演后续分支"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>AI 参谋推演后续候选</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSubFocusModalTarget(selectedFocus);
+                      setIsSubFocusModalOpen(true);
+                    }}
+                    className="hoi4-btn-steel px-3 py-1.5 rounded-sm flex items-center space-x-1 text-[#cbd5e1]"
+                  >
+                    <ListTodo className="w-3.5 h-3.5 text-[#94a3b8]" />
+                    <span>管理战役拆解清单</span>
+                  </button>
+                </div>
+
                 <button
-                  type="button"
-                  onClick={handleOpenAiRefineBody}
-                  className="flex items-center space-x-1 px-2.5 py-1 bg-[#221a10] hover:bg-[#2e2316] border border-[#a38237]/70 text-strategy-gold rounded text-xs font-mono transition"
-                  title="唤起 AI 指令对话框，输入要求后润色战略说明"
+                  onClick={handleDeleteFocus}
+                  className="text-rose-400 hover:text-rose-300 text-xs font-mono flex items-center space-x-1 transition"
                 >
-                  <Sparkles className="w-3 h-3 text-strategy-gold" />
-                  <span>AI 参谋润色</span>
-                </button>
-                <button
-                  onClick={handleSaveNodeContent}
-                  className="flex items-center space-x-1 px-3 py-1 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-black font-serif font-bold rounded text-xs shadow-sm"
-                >
-                  <Save className="w-3 h-3" />
-                  <span>保存档案</span>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>销毁此项国策</span>
                 </button>
               </div>
             </div>
-          </div>
-
-          {/* Status Change Buttons (§7.2: 四状态任意转换，记录历史) */}
-          <div className="space-y-2 pt-2 border-t border-[#2d3a30]">
-            <span className="text-xs font-mono uppercase font-bold text-[#8b9b8f]">指令状态调令:</span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => handleStatusChange('active')}
-                className={`py-1.5 px-2 rounded-sm text-xs font-mono font-bold border transition ${
-                  selectedFocus.status === 'active'
-                    ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500 shadow-[0_0_8px_rgba(74,222,128,0.3)]'
-                    : 'bg-[#18211a] text-[#8b9b8f] border-[#2e3c31] hover:text-[#e7e0cc] hover:bg-[#202b23]'
-                }`}
-              >
-                ● 战役进行中
-              </button>
-              <button
-                onClick={() => handleStatusChange('completed')}
-                className={`py-1.5 px-2 rounded-sm text-xs font-mono font-bold border transition ${
-                  selectedFocus.status === 'completed'
-                    ? 'bg-[#292211] text-[#f7e192] border-[#d4af37] shadow-[0_0_8px_rgba(212,175,55,0.4)]'
-                    : 'bg-[#18211a] text-[#8b9b8f] border-[#2e3c31] hover:text-[#e7e0cc] hover:bg-[#202b23]'
-                }`}
-              >
-                ★ 达成战略
-              </button>
-              <button
-                onClick={() => handleStatusChange('paused')}
-                className={`py-1.5 px-2 rounded-sm text-xs font-mono font-bold border transition ${
-                  selectedFocus.status === 'paused'
-                    ? 'bg-[#231d13] text-amber-300 border-amber-600/80'
-                    : 'bg-[#18211a] text-[#8b9b8f] border-[#2e3c31] hover:text-[#e7e0cc] hover:bg-[#202b23]'
-                }`}
-              >
-                ⏳ 战略休整
-              </button>
-              <button
-                onClick={() => handleStatusChange('revoked')}
-                className={`py-1.5 px-2 rounded-sm text-xs font-mono font-bold border transition ${
-                  selectedFocus.status === 'revoked'
-                    ? 'bg-[#291212] text-rose-300 border-rose-600/80 line-through'
-                    : 'bg-[#18211a] text-[#8b9b8f] border-[#2e3c31] hover:text-[#e7e0cc] hover:bg-[#202b23]'
-                }`}
-              >
-                ✕ 作战中止
-              </button>
-            </div>
-            <input
-              type="text"
-              placeholder="可选：调令事由（如：阶段达标、战术转向...）"
-              value={statusReason}
-              onChange={(e) => setStatusReason(e.target.value)}
-              className="w-full bg-[#0d120f] border border-[#38483c] rounded px-2.5 py-1 text-xs text-[#e7e0cc] placeholder-[#5c6e62] focus:outline-none focus:border-strategy-gold mt-1 font-serif"
-            />
-          </div>
-
-          {/* Sub-Focus Section */}
-          <div className="space-y-2 pt-2 border-t border-[#2d3a30]">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-mono uppercase font-bold text-[#8b9b8f]">战役执行拆解清单:</span>
-              <span className="text-[11px] font-mono text-strategy-gold font-bold">
-                {subCounts[selectedFocus.id]?.done || 0} / {subCounts[selectedFocus.id]?.total || 0} 步骤达成
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setSubFocusModalTarget(selectedFocus);
-                setIsSubFocusModalOpen(true);
-              }}
-              className="w-full py-2 px-3 bg-[#18221b] hover:bg-[#223026] text-strategy-gold border border-strategy-gold/40 rounded-sm text-xs font-mono font-bold transition flex items-center justify-center space-x-2 shadow-inner"
-            >
-              <ListTodo className="w-4 h-4 text-strategy-gold" />
-              <span>展开管理战役子任务清单</span>
-            </button>
-          </div>
-
-          {/* Relations Inspector (§7.3: 互斥与前置线路展示与解绑) */}
-          <div className="space-y-2 pt-2 border-t border-[#2d3a30] text-xs">
-            <span className="font-mono uppercase font-bold text-[#8b9b8f]">战略路线战区图网:</span>
-
-            {/* Incoming Prerequisites */}
-            <div className="space-y-1">
-              <span className="text-[11px] font-mono text-[#7d8e82]">前置战略依赖:</span>
-              {currentIncoming.length === 0 ? (
-                <div className="text-[11px] text-[#637367] italic font-serif">无前置依赖（根基首发起点）</div>
-              ) : (
-                currentIncoming.map((r) => {
-                  const src = foci.find((f) => f.id === r.source_focus_id);
-                  return (
-                    <div key={r.id} className="p-1.5 bg-[#17201a] border border-[#2b392e] rounded-sm flex items-center justify-between text-[11px]">
-                      <span className="text-amber-300 font-serif truncate">{src?.title || '未知国策'}</span>
-                      <button
-                        onClick={() => handleDeleteRelation(r.id)}
-                        className="text-rose-400 hover:underline shrink-0 ml-2 font-mono text-[10px]"
-                      >
-                        解绑
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Outgoing Prerequisites */}
-            <div className="space-y-1 pt-1">
-              <span className="text-[11px] font-mono text-[#7d8e82]">后续开拓路线:</span>
-              {currentOutgoing.length === 0 ? (
-                <div className="text-[11px] text-[#637367] italic font-serif">暂无后续衍生国策</div>
-              ) : (
-                currentOutgoing.map((r) => {
-                  const tgt = foci.find((f) => f.id === r.target_focus_id);
-                  return (
-                    <div key={r.id} className="p-1.5 bg-[#17201a] border border-[#2b392e] rounded-sm flex items-center justify-between text-[11px]">
-                      <span className="text-sky-300 font-serif truncate">{tgt?.title || '未知国策'}</span>
-                      <button
-                        onClick={() => handleDeleteRelation(r.id)}
-                        className="text-rose-400 hover:underline shrink-0 ml-2 font-mono text-[10px]"
-                      >
-                        解绑
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Mutually Exclusive */}
-            <div className="space-y-1 pt-1">
-              <span className="text-[11px] text-rose-400 flex items-center space-x-1 font-mono">
-                <ShieldMinus className="w-3 h-3" />
-                <span>互斥冲突战线:</span>
-              </span>
-              {currentMutuallyExclusive.length === 0 ? (
-                <div className="text-[11px] text-[#637367] italic font-serif">无互斥路线</div>
-              ) : (
-                currentMutuallyExclusive.map((r) => {
-                  const otherId = r.source_focus_id === selectedFocus.id ? r.target_focus_id : r.source_focus_id;
-                  const other = foci.find((f) => f.id === otherId);
-                  return (
-                    <div key={r.id} className="p-1.5 bg-rose-950/40 border border-rose-900/60 rounded-sm flex items-center justify-between text-[11px]">
-                      <span className="text-rose-300 font-serif truncate">{other?.title || '未知国策'}</span>
-                      <button
-                        onClick={() => handleDeleteRelation(r.id)}
-                        className="text-rose-400 hover:underline shrink-0 ml-2 font-mono text-[10px]"
-                      >
-                        解绑
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* AI Next Node Suggestion Trigger (§7.4) */}
-          <div className="pt-2 border-t border-[#2d3a30]">
-            <button
-              onClick={handleOpenAiNextNode}
-              className="w-full py-2 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-black font-serif font-bold rounded-sm text-xs flex items-center justify-center space-x-1.5 transition shadow-md"
-              title="打开 AI 对话指令框，输入定制策略方向并推演后续国策候选"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-black" />
-              <span>AI 参谋定制推演下阶段</span>
-            </button>
-          </div>
-
-          {/* Status History */}
-          <div className="space-y-2 pt-2 border-t border-[#2d3a30] flex-1">
-            <span className="text-xs font-mono uppercase font-bold text-[#8b9b8f] flex items-center space-x-1">
-              <History className="w-3.5 h-3.5 text-strategy-gold" />
-              <span>调令流转历史记录</span>
-            </span>
-            <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
-              {focusHistory.map((h) => (
-                <div key={h.id} className="p-2 bg-[#161f19] border border-[#2b392e] rounded-sm text-[11px] space-y-0.5 font-mono">
-                  <div className="flex items-center justify-between font-bold text-amber-300">
-                    <span>{h.from_status ? `${h.from_status} → ${h.to_status}` : `初始: ${h.to_status}`}</span>
-                    <span className="text-[10px] text-[#7d8e82]">{h.occurred_at.slice(0, 10)}</span>
-                  </div>
-                  {h.reason && <p className="text-[#a2b2a6] font-serif text-[11px]">{h.reason}</p>}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Delete Action */}
-          <div className="pt-3 border-t border-[#2d3a30]">
-            <button
-              onClick={handleDeleteFocus}
-              className="w-full py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-700 text-rose-200 rounded-sm text-xs font-serif font-bold flex items-center justify-center space-x-1 transition shadow"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>销毁此项国策档案</span>
-            </button>
           </div>
         </div>
       )}
 
-      {/* Create Focus Modal (制定全新国策战役公函) */}
+      {/* 4. HOI4 原生立项公函弹窗 (Create Focus Modal) */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="dossier-card border-2 border-[#967b36] rounded-sm shadow-[0_12px_36px_rgba(0,0,0,0.9)] p-6 w-full max-w-md relative">
+          <div className="hoi4-window w-full max-w-md rounded shadow-2xl p-5 relative border-2 border-[#3d4652] text-[#ffffff]">
             <div className="absolute top-2 left-2 screw-rivet" />
             <div className="absolute top-2 right-2 screw-rivet" />
 
-            <h3 className="text-lg font-serif font-bold text-amber-300 mb-4 flex items-center space-x-2">
-              <Plus className="w-5 h-5 text-strategy-gold" />
+            <h3 className="text-base font-serif font-black text-[#ffffff] mb-4 flex items-center space-x-2 drop-shadow">
+              <Plus className="w-4 h-4 text-[#d4af37]" />
               <span>制定战略国策 (NEW DIRECTIVE)</span>
             </h3>
-            <form onSubmit={handleCreateSubmit} className="space-y-4">
+
+            <form onSubmit={handleCreateSubmit} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-mono font-bold text-[#8b9b8f] mb-1">国策番号与名称 *</label>
+                <label className="block text-[11px] font-mono font-bold text-[#94a3b8] mb-1">
+                  国策番号与名称 *
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="例如：攻克核心系统架构师、主导业务项目落地..."
+                  placeholder="例如：优先经济建设、攻克核心系统架构师..."
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full bg-[#0d120f] border border-[#38483c] rounded px-3 py-1.5 text-sm font-serif text-[#e7e0cc] placeholder-[#5c6e62] focus:outline-none focus:border-strategy-gold"
+                  className="w-full bg-[#0d1013] border border-[#373e47] rounded px-3 py-1.5 text-xs text-[#ffffff] placeholder-[#64748b] focus:outline-none focus:border-[#d4af37]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-bold text-[#8b9b8f] mb-1">战略意图与攻坚方向 (MARKDOWN)</label>
+                <label className="block text-[11px] font-mono font-bold text-[#94a3b8] mb-1">
+                  战略意图与攻坚方向 (MARKDOWN)
+                </label>
                 <textarea
                   rows={3}
-                  placeholder="详细描述该国策的核心战略意图与阶段目标..."
+                  placeholder="详细描述该国策的核心战略意图与推进步骤..."
                   value={newBodyMd}
                   onChange={(e) => setNewBodyMd(e.target.value)}
-                  className="w-full bg-[#0d120f] border border-[#38483c] rounded px-3 py-1.5 text-sm font-serif text-[#e7e0cc] placeholder-[#5c6e62] focus:outline-none focus:border-strategy-gold"
+                  className="w-full bg-[#0d1013] border border-[#373e47] rounded px-3 py-1.5 text-xs text-[#ffffff] placeholder-[#64748b] focus:outline-none focus:border-[#d4af37]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-bold text-[#8b9b8f] mb-1">初始战役态势</label>
+                <label className="block text-[11px] font-mono font-bold text-[#94a3b8] mb-1">
+                  初始战役态势
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setNewStatus('active')}
-                    className={`py-1.5 text-xs font-mono font-bold rounded-sm border ${
-                      newStatus === 'active' ? 'bg-emerald-950 text-emerald-300 border-emerald-500 shadow-sm' : 'bg-[#18211a] border-[#2e3c31] text-[#8b9b8f]'
+                    className={`py-1.5 text-xs font-mono font-bold rounded-sm border transition ${
+                      newStatus === 'active'
+                        ? 'bg-emerald-950 text-emerald-300 border-emerald-500 shadow'
+                        : 'bg-[#1a1e23] border-[#373e47] text-[#94a3b8]'
                     }`}
                   >
                     ● 战役执行中 (Active)
@@ -1246,8 +1219,10 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
                   <button
                     type="button"
                     onClick={() => setNewStatus('paused')}
-                    className={`py-1.5 text-xs font-mono font-bold rounded-sm border ${
-                      newStatus === 'paused' ? 'bg-[#231d13] text-amber-300 border-amber-600/80 shadow-sm' : 'bg-[#18211a] border-[#2e3c31] text-[#8b9b8f]'
+                    className={`py-1.5 text-xs font-mono font-bold rounded-sm border transition ${
+                      newStatus === 'paused'
+                        ? 'bg-[#291f0c] text-amber-300 border-amber-600 shadow'
+                        : 'bg-[#1a1e23] border-[#373e47] text-[#94a3b8]'
                     }`}
                   >
                     ⏳ 战略休整 (Paused)
@@ -1259,13 +1234,13 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-1.5 text-xs font-mono rounded-sm bg-[#1e2720] hover:bg-[#28352b] text-slate-300 border border-slate-600"
+                  className="hoi4-btn-steel px-4 py-1.5 text-xs font-mono rounded-sm"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-serif font-bold rounded-sm bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-black shadow-md"
+                  className="hoi4-btn-military px-5 py-1.5 text-xs font-serif font-bold rounded-sm text-white shadow-md"
                 >
                   签署立项
                 </button>

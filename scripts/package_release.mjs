@@ -44,10 +44,59 @@ if (fs.existsSync(licenseSrc)) {
   fs.copyFileSync(licenseSrc, path.join(greenDir, 'LICENSE'));
 }
 
+// Injects 一键更新便携版.bat
+const updateBatContent = `@echo off
+chcp 65001 >nul
+title 人生战略游戏 - 便携版无感更新程序
+
+echo ========================================================
+echo        人生战略游戏 - 便携版一键无感更新程序
+echo ========================================================
+echo.
+echo 说明：
+echo 1. 本脚本将安全地为您更新游戏主程序，绝不覆盖或影响任何历史数据！
+echo 2. 您的所有人生空间、国策树、心智特质、随笔及 API Key（保存在 ./data/ 中）
+echo    均将 100%% 完整保留。
+echo.
+
+set CURRENT_DIR=%~dp0
+set TARGET_EXE=%CURRENT_DIR%人生战略游戏.exe
+
+:: 检查当前目录下是否存在 data 目录
+if not exist "%CURRENT_DIR%data" (
+    echo [提示] 检测到当前目录为全新解压包（尚未包含 ./data/ 目录）。
+    echo 正在自动扫描邻近目录中的旧版本数据...
+    for /d %%D in ("%CURRENT_DIR%..\\*") do (
+        if exist "%%D\\data\\life_strategy.db" (
+            if not "%%~fD"=="%CURRENT_DIR:~0,-1%" (
+                echo [发现旧版本] 正在从 "%%~nxD" 无缝接力数据...
+                xcopy /E /I /Y "%%D\\data" "%CURRENT_DIR%data" >nul
+                echo [成功] 历史战略数据已无感迁移至当前版本！
+                goto :LAUNCH
+            )
+        )
+    )
+)
+
+:LAUNCH
+echo.
+echo [完成] 更新准备就绪！
+echo 正在启动最新版本人生战略游戏...
+start "" "%TARGET_EXE%"
+exit /b 0
+`;
+fs.writeFileSync(path.join(greenDir, '一键更新便携版.bat'), updateBatContent, 'utf8');
+console.log('✓ Injected 一键更新便携版.bat');
+
 // Write usage instructions
 const greenReadme = `=============================================
   人生战略游戏 (Life Strategy Game) v${VERSION}
 =============================================
+
+【便携版无感更新说明】
+解压新版本压缩包后，只需双击「一键更新便携版.bat」或直接运行「人生战略游戏.exe」，
+程序内部内置了智能迁移引擎，会自动检测邻近目录的旧版本数据并无感接力迁移（或在
+游戏内「设置 -> 本地存储」中一键无感迁移），无需手动搬运文件，零数据丢失！
 
 【使用指南】
 1. 本程序为免安装绿色便携版，解压后双击「人生战略游戏.exe」即可直接运行。
@@ -56,6 +105,7 @@ const greenReadme = `=============================================
 3. 数据存储与便携模式：
    - 绿色版已预置 portable.flag 标识，数据库与 LLM 本地配置均存放在同级 ./data/ 目录中。
    - 核心业务数据默认保存在本地 SQLite 数据库中。
+   - LLM API Key 永久保存在本地便携保险库 (./data/.llm_vault) 中，重启绝不丢失。
    - 未配置第三方 AI 服务时不会发起网络请求；启用 AI 时仅与您配置的服务商进行通信。
 4. 核心功能与操作：
    - 鼠标左键拖拽平移国策树画布，滚轮缩放视图

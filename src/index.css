@@ -4,15 +4,15 @@
 
 @layer base {
   body {
-    background-color: #0f1311;
+    background-color: #121518;
     background-image: 
-      radial-gradient(ellipse at 50% 0%, rgba(35, 48, 38, 0.4) 0%, transparent 75%),
-      radial-gradient(circle at 100% 100%, rgba(20, 26, 22, 0.6) 0%, transparent 60%),
+      radial-gradient(ellipse at 50% 0%, rgba(30, 36, 44, 0.5) 0%, transparent 75%),
+      radial-gradient(circle at 100% 100%, rgba(18, 22, 28, 0.7) 0%, transparent 60%),
       linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
     background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
-    color: #e5dec9;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
+    color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   }
 }
 
@@ -23,401 +23,293 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #111613;
-  border-left: 1px solid #1f2821;
+  background: #111417;
+  border-left: 1px solid #232830;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2e3b31;
-  border: 1px solid #455749;
+  background: #323a44;
+  border: 1px solid #4a5462;
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #546a59;
+  background: #536070;
 }
 
-/* War Room Heavy Brass Header with Rivets & Bevel */
-.brass-header-heavy {
-  background: linear-gradient(180deg, #2b332d 0%, #1e2520 40%, #141916 100%);
-  border-bottom: 2px solid #a38237;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 230, 160, 0.25);
+/* =========================================================================
+   AUTHENTIC HOI4 (HEARTS OF IRON IV) SKEUOMORPHIC UI SYSTEM
+   ========================================================================= */
+
+/* 1. Heavy Gunmetal Steel Chassis & Window (素材图 2, 3, 5, 6, 7) */
+.hoi4-window {
+  background: linear-gradient(180deg, #262c33 0%, #1a1e23 45%, #13161a 100%);
+  border: 2px solid #3d4652;
+  border-top-color: #556172;
+  border-left-color: #4b5665;
+  box-shadow: 
+    0 16px 48px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    inset 0 0 20px rgba(0, 0, 0, 0.5);
   position: relative;
 }
 
-.brass-header-heavy::after {
+.hoi4-header-bar {
+  background: linear-gradient(180deg, #2c333c 0%, #1e2329 100%);
+  border-bottom: 2px solid #3a434f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 3px 6px rgba(0, 0, 0, 0.6);
+  position: relative;
+}
+
+/* Inset Dark Slate Box (for requirements, flavor text, options lists) */
+.hoi4-inset-panel {
+  background-color: #0f1215;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 16px 16px;
+  border: 1.5px solid #272d36;
+  border-top-color: #1a1e24;
+  border-left-color: #1c2128;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.85), 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* 2. Iconic Square Bronze/Steel Close Button 'X' (素材图 3, 6, 7 右上角) */
+.hoi4-close-btn {
+  width: 26px;
+  height: 26px;
+  background: linear-gradient(180deg, #53452c 0%, #302617 60%, #1c150b 100%);
+  border: 1.5px solid #826b42;
+  border-top-color: #bfa167;
+  border-left-color: #a88a51;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 240, 180, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #dfc282;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hoi4-close-btn:hover {
+  background: linear-gradient(180deg, #6c5a3b 0%, #443621 60%, #291f11 100%);
+  color: #fff2c4;
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* 3. Dark Olive-Green Military Plate Button (Start / Apply / Back 按钮) */
+.hoi4-btn-military {
+  background: linear-gradient(180deg, #3d5040 0%, #2a372c 50%, #1e2820 100%);
+  border: 1.5px solid #4a634e;
+  border-top-color: #688c6e;
+  border-left-color: #59775e;
+  box-shadow: 
+    0 3px 6px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+  color: #ffffff;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.hoi4-btn-military:hover {
+  background: linear-gradient(180deg, #4b634f 0%, #354638 50%, #263328 100%);
+  border-color: #7ba382;
+  box-shadow: 
+    0 4px 10px rgba(0, 0, 0, 0.8),
+    0 0 8px rgba(74, 222, 128, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.hoi4-btn-military:active {
+  background: linear-gradient(180deg, #1e2820 0%, #2a372c 100%);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.9);
+  transform: translateY(1px);
+}
+
+/* 4. Beveled Steel Button (Default Tabs / Controls) */
+.hoi4-btn-steel {
+  background: linear-gradient(180deg, #323942 0%, #22272e 50%, #181c21 100%);
+  border: 1.5px solid #444d5a;
+  border-top-color: #5c687a;
+  border-left-color: #515c6c;
+  box-shadow: 
+    0 2px 5px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  color: #e2e8f0;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.hoi4-btn-steel:hover {
+  background: linear-gradient(180deg, #3c4550 0%, #293038 50%, #1f232a 100%);
+  border-color: #6c7a8f;
+  color: #ffffff;
+}
+
+.hoi4-btn-steel-active {
+  background: linear-gradient(180deg, #181c21 0%, #22272e 100%);
+  border-color: #d4af37;
+  color: #fef08a;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(212, 175, 55, 0.35);
+}
+
+/* 5. Inset Capsule Pill (35 days / Status pill) */
+.hoi4-pill-badge {
+  background: #0d0f12;
+  border: 1.5px solid #38414e;
+  border-bottom-color: #4a5566;
+  border-right-color: #424c5b;
+  border-radius: 9999px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+}
+
+/* 6. HOI4 Golden Laurel Wreath National Focus Node (素材图 3, 4) */
+.hoi4-laurel-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hoi4-wreath-gold {
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.85));
+}
+
+/* Nameplate under focus wreath */
+.hoi4-node-nameplate {
+  background: linear-gradient(180deg, #282f37 0%, #1c2127 55%, #13161a 100%);
+  border: 1.5px solid #434e5c;
+  border-top-color: #5c6a7d;
+  border-left-color: #505c6d;
+  box-shadow: 
+    0 4px 10px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+/* Canvas Top Chevron Girder Bar (素材图 4 顶部防滑履带铁轨条) */
+.hoi4-canvas-girder {
+  height: 28px;
+  background-color: #181c20;
+  background-image: 
+    repeating-linear-gradient(45deg, #252b32 0, #252b32 10px, #1c2126 10px, #1c2126 20px),
+    repeating-linear-gradient(-45deg, #252b32 0, #252b32 10px, #1c2126 10px, #1c2126 20px);
+  border-bottom: 2px solid #3c4450;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7), inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.hoi4-canvas-girder::after {
   content: '';
   position: absolute;
-  bottom: -4px;
+  bottom: 0;
   left: 0;
   right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent 0%, #d8b153 25%, #ffd978 50%, #d8b153 75%, transparent 100%);
-  opacity: 0.6;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, #d4af37 50%, transparent 100%);
+  opacity: 0.7;
 }
 
-/* Brass and military tactical borders */
-.tactical-border {
-  border: 1px solid #334035;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 3px 8px rgba(0, 0, 0, 0.5);
+/* 7. HOI4 World News Newspaper (素材图 1) */
+.hoi4-newspaper {
+  background-color: #d8cdb8;
+  background-image:
+    radial-gradient(ellipse at 50% 20%, rgba(255, 255, 255, 0.4) 0%, transparent 80%),
+    radial-gradient(circle at 10% 90%, rgba(160, 140, 110, 0.25) 0%, transparent 50%),
+    linear-gradient(180deg, #dfd5c2 0%, #d2c5ae 100%);
+  border: 2px solid #9e8e72;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.95),
+    inset 0 0 40px rgba(120, 95, 60, 0.2);
+  color: #1c1917;
+  font-family: "Noto Serif SC", SimSun, Georgia, serif;
 }
 
-.tactical-panel {
-  background: linear-gradient(180deg, #1b231d 0%, #131915 100%);
-  border: 1px solid #2d3b31;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 12px rgba(0, 0, 0, 0.5);
+.hoi4-news-photo-frame {
+  border: 2px solid #5a4e3c;
+  background: #111;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+  filter: grayscale(100%) contrast(115%);
 }
 
-/* Stamped seals (Top Secret, Approved, Completed) */
-.stamp-top-secret {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #ef4444;
-  border: 2px solid #ef4444;
-  border-radius: 3px;
-  text-transform: uppercase;
-  font-family: monospace;
-  font-weight: 900;
-  letter-spacing: 0.15em;
-  padding: 2px 8px;
-  transform: rotate(-5deg);
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.3), inset 0 0 6px rgba(239, 68, 68, 0.15);
-  text-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
-  user-select: none;
+/* 8. Glowing Orange Gradient for Selection (素材图 7 经济法案选中高亮) */
+.hoi4-selection-glow {
+  border: 1.5px solid #f59e0b !important;
+  box-shadow: 
+    0 0 14px rgba(245, 158, 11, 0.45),
+    inset 0 0 8px rgba(245, 158, 11, 0.2) !important;
 }
 
-.stamp-gold-order {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #f7df94;
-  border: 1.5px solid #c9a84d;
-  border-radius: 2px;
-  text-transform: uppercase;
-  font-family: monospace;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  padding: 2px 6px;
-  background: rgba(201, 168, 77, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 8px rgba(201, 168, 77, 0.25);
-}
-
-.stamp-active-war {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #4ade80;
-  border: 1.5px solid #22c55e;
-  border-radius: 2px;
-  font-family: monospace;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  padding: 2px 6px;
-  background: rgba(34, 197, 94, 0.12);
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
-}
-
-/* Screw / Rivet head dot */
+/* 9. Screw / Rivet head */
 .screw-rivet {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #718096 0%, #2d3748 70%, #1a202c 100%);
-  border: 1px solid #1a202c;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.4);
-}
-
-/* Dossier Weathered Paper effect */
-.dossier-card {
-  background: linear-gradient(180deg, #1d2520 0%, #161c18 100%);
-  border: 1px solid #334237;
-  box-shadow: 
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 4px 14px rgba(0, 0, 0, 0.5);
-  position: relative;
-}
-
-.dossier-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #8a7337 0%, #d8b153 30%, #8a7337 100%);
-  opacity: 0.7;
-}
-
-/* Metallic gold gradient text */
-.gold-gradient-text {
-  background: linear-gradient(180deg, #fff2c4 0%, #d8b153 50%, #997327 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.8));
+  background: radial-gradient(circle at 35% 35%, #8896ab 0%, #3a424e 70%, #1a1e24 100%);
+  border: 1px solid #14171c;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.5);
 }
 
 /* Radar pulse animation for active focus nodes */
 @keyframes radar-pulse-border {
   0% {
-    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.4), inset 0 0 6px rgba(74, 222, 128, 0.2);
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6), inset 0 0 8px rgba(74, 222, 128, 0.3);
   }
   70% {
-    box-shadow: 0 0 0 8px rgba(74, 222, 128, 0), inset 0 0 12px rgba(74, 222, 128, 0.4);
+    box-shadow: 0 0 0 10px rgba(74, 222, 128, 0), inset 0 0 14px rgba(74, 222, 128, 0.5);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0), inset 0 0 6px rgba(74, 222, 128, 0.2);
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0), inset 0 0 8px rgba(74, 222, 128, 0.3);
   }
 }
 
 .animate-radar-pulse {
-  animation: radar-pulse-border 2.5s infinite;
+  animation: radar-pulse-border 2.2s infinite;
 }
 
-/* Metallic Gold Medallion Completed Node */
-.node-plaque-completed {
-  background: linear-gradient(180deg, #242116 0%, #17150d 50%, #100e08 100%);
-  border: 1.5px solid #d4af37;
-  box-shadow: 
-    inset 0 1px 0 rgba(255, 235, 160, 0.35),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.6),
-    0 4px 16px rgba(0, 0, 0, 0.7),
-    0 0 12px rgba(212, 175, 55, 0.25);
-}
-
-/* Tactical Active Battle Order Node */
-.node-plaque-active {
-  background: linear-gradient(180deg, #18261c 0%, #111a14 50%, #0d140f 100%);
-  border: 1.5px solid #22c55e;
-  box-shadow: 
-    inset 0 1px 0 rgba(134, 239, 172, 0.3),
-    0 4px 16px rgba(0, 0, 0, 0.7),
-    0 0 14px rgba(34, 197, 94, 0.25);
-}
-
-/* Paused / Resting Strategy Node */
-.node-plaque-paused {
-  background: linear-gradient(180deg, #242017 0%, #1a1711 100%);
-  border: 1.5px dashed #b45309;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
-}
-
-/* Revoked / Voided Node */
-.node-plaque-revoked {
-  background: linear-gradient(180deg, #1f1717 0%, #140f0f 100%);
-  border: 1.5px solid #7f1d1d;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
-  opacity: 0.78;
-}
-
-/* Tactical War-Room Grid Background for Canvas */
-.war-room-canvas-grid {
-  background-color: #0b0e0c;
-  background-image:
-    radial-gradient(circle at 50% 50%, rgba(26, 36, 29, 0.8) 0%, rgba(11, 14, 12, 0.98) 100%),
-    linear-gradient(rgba(138, 115, 55, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(138, 115, 55, 0.08) 1px, transparent 1px),
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 100% 100%, 160px 160px, 160px 160px, 32px 32px, 32px 32px;
-}
-
-/* Tactile Stamp Slam Animation (解压式实体印章重击反馈) */
-@keyframes stamp-slam {
-  0% {
-    transform: scale(2.8) rotate(-24deg);
-    opacity: 0;
+/* Golden Victory Aura */
+@keyframes golden-aura {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(234, 179, 8, 0.5));
   }
-  65% {
-    transform: scale(0.92) rotate(-6deg);
-    opacity: 1;
-  }
-  85% {
-    transform: scale(1.05) rotate(-5deg);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1) rotate(-6deg);
-    opacity: 1;
+  50% {
+    filter: drop-shadow(0 0 12px rgba(253, 224, 71, 0.85));
   }
 }
 
-.animate-stamp-slam {
-  animation: stamp-slam 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-  display: inline-block;
-  transform-origin: center center;
+.animate-golden-aura {
+  animation: golden-aura 3s ease-in-out infinite;
 }
 
-/* =========================================================================
-   PHYSICAL SKEUOMORPHIC STYLES (MATCHING WAR ROOM CONCEPT ART)
-   ========================================================================= */
-
-/* 1. Manila Folder & Aged Document Paper */
-.manila-paper {
-  background-color: #dfd4be;
-  background-image:
-    radial-gradient(ellipse at 15% 25%, rgba(255, 252, 245, 0.6) 0%, transparent 60%),
-    radial-gradient(circle at 85% 75%, rgba(185, 155, 115, 0.35) 0%, transparent 50%),
-    linear-gradient(180deg, #ede3cb 0%, #dbccaa 60%, #cebe97 100%);
-  border: 1px solid #b3a078;
-  box-shadow:
-    inset 0 0 30px rgba(110, 80, 30, 0.2),
-    0 8px 24px rgba(0, 0, 0, 0.7);
-  color: #2b2318;
+/* High Contrast Text Utility Classes */
+.text-hoi4-title {
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
 }
 
-.manila-folder-tab {
-  background: linear-gradient(180deg, #f3ebd7 0%, #dfd3b6 100%);
-  border-top: 2px solid #caa965;
-  border-left: 2px solid #b89753;
-  border-right: 2px solid #8f702e;
-  border-radius: 8px 22px 0 0;
-  box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.45);
-  color: #2b2318;
+.text-hoi4-desc {
+  color: #f1f5f9 !important;
+  line-height: 1.6;
 }
 
-/* 2. Tactical War-Room Parchment Map (Canvas Background) */
-.parchment-map {
-  background-color: #b9ad95;
-  background-image:
-    radial-gradient(circle at 50% 50%, rgba(235, 226, 208, 0.95) 0%, rgba(178, 164, 137, 0.98) 100%),
-    radial-gradient(circle at 85% 15%, rgba(135, 110, 75, 0.3) 0%, transparent 45%),
-    linear-gradient(rgba(110, 90, 60, 0.15) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(110, 90, 60, 0.15) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 100%, 72px 72px, 72px 72px;
-  box-shadow: inset 0 0 100px rgba(50, 35, 15, 0.55);
+.text-hoi4-modifier {
+  color: #fbbf24 !important;
+  font-weight: 700;
 }
 
-/* 3. Heavy Brushed Brass Console */
-.brushed-brass-console {
-  background: linear-gradient(180deg, #d8ba78 0%, #b89347 25%, #886526 60%, #baa05e 85%, #6a4c17 100%);
-  border: 2px solid #4a3712;
-  box-shadow:
-    inset 0 1.5px 2px rgba(255, 255, 255, 0.7),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.7),
-    0 6px 20px rgba(0, 0, 0, 0.85);
+.text-hoi4-check {
+  color: #22c55e !important;
+  font-weight: 700;
 }
 
-.brass-recessed-chassis {
-  background: linear-gradient(180deg, #181d1a 0%, #111512 100%);
-  border: 2px solid #2e3b32;
-  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.85), 0 2px 4px rgba(255, 255, 255, 0.05);
+.text-hoi4-danger {
+  color: #ef4444 !important;
+  font-weight: 700;
 }
 
-/* 4. Industrial Metal Tabs */
-.btn-console-tab-active {
-  background: linear-gradient(180deg, #edd28c 0%, #cfa847 45%, #926f28 100%);
-  border: 1.5px solid #fff0a8;
-  border-bottom: 2px solid #573f11;
-  box-shadow: inset 0 1px 2px #fff, 0 3px 8px rgba(0, 0, 0, 0.7);
-  color: #1a150b;
-  font-weight: 800;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
-}
-
-.btn-console-tab-inactive {
-  background: linear-gradient(180deg, #242c26 0%, #171d19 100%);
-  border: 1px solid #334036;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.7);
-  color: #8c9e91;
-}
-
-.btn-console-tab-inactive:hover {
-  background: linear-gradient(180deg, #2f3a32 0%, #1f2722 100%);
-  color: #d1ded5;
-}
-
-/* 5. 3D Embossed Hexagonal Medallions */
-.medallion-badge-gold {
-  background: radial-gradient(circle at 35% 35%, #fff2be 0%, #e1b957 40%, #9e7525 80%, #684a14 100%);
-  box-shadow: 
-    0 8px 18px rgba(0, 0, 0, 0.7),
-    inset 0 2px 4px rgba(255, 255, 255, 0.75),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.8);
-  border: 2px solid #523b12;
-}
-
-.medallion-badge-bronze {
-  background: radial-gradient(circle at 35% 35%, #d6c098 0%, #a4824e 45%, #6a4f25 85%, #423012 100%);
-  box-shadow: 
-    0 6px 14px rgba(0, 0, 0, 0.7),
-    inset 0 2px 3px rgba(255, 255, 255, 0.6),
-    inset 0 -2px 3px rgba(0, 0, 0, 0.8);
-  border: 2px solid #3d2b0e;
-}
-
-.medallion-badge-emerald {
-  background: radial-gradient(circle at 35% 35%, #9ef0b5 0%, #22c55e 45%, #15803d 85%, #0d4621 100%);
-  box-shadow: 
-    0 6px 16px rgba(0, 0, 0, 0.7),
-    inset 0 2px 3px rgba(255, 255, 255, 0.7),
-    inset 0 -2px 3px rgba(0, 0, 0, 0.8);
-  border: 2px solid #14532d;
-}
-
-/* Hanging Grosgrain Ribbon */
-.grosgrain-ribbon-red {
-  background: linear-gradient(90deg, 
-    #7f1d1d 0%, #991b1b 30%, 
-    #eab308 35%, #ca8a04 50%, #eab308 65%, 
-    #991b1b 70%, #7f1d1d 100%
-  );
-  box-shadow: 0 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.4);
-  border: 1px solid #450a0a;
-}
-
-.grosgrain-ribbon-emerald {
-  background: linear-gradient(90deg, 
-    #14532d 0%, #16a34a 30%, 
-    #fef08a 35%, #eab308 50%, #fef08a 65%, 
-    #16a34a 70%, #14532d 100%
-  );
-  box-shadow: 0 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.4);
-  border: 1px solid #064e3b;
-}
-
-/* 6. Distressed Red Stamp */
-.distressed-stamp-red {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #991b1b;
-  border: 2.5px dashed #991b1b;
-  font-family: monospace;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  transform: rotate(-7deg);
-  background: rgba(185, 28, 28, 0.04);
-  box-shadow: 0 0 1px #991b1b;
-  text-shadow: 0 0 1px rgba(153, 27, 27, 0.7);
-  user-select: none;
-}
-
-/* 7. Analog Dial Meter Casing */
-.analog-dial-casing {
-  background: radial-gradient(circle at 50% 50%, #f7f1e1 0%, #e4d6be 65%, #baa583 100%);
-  border: 3.5px solid #b89347;
-  box-shadow: 
-    inset 0 3px 6px rgba(0,0,0,0.5),
-    0 4px 12px rgba(0,0,0,0.8),
-    inset 0 -1.5px 2px rgba(255,255,255,0.85);
-  position: relative;
-}
-
-.analog-dial-glass {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.05) 50%, transparent 100%);
-  pointer-events: none;
-}
-
-/* 8. Connection Ball-Joint Pins */
-.ball-joint-pin {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #fff5c8 0%, #cfa847 60%, #684a14 100%);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.6);
-  border: 0.5px solid #4a3510;
-}

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { Event } from '../api/types';
-import { Sparkles, Calendar, Quote, X } from 'lucide-react';
+import { Calendar, Quote, X, Newspaper } from 'lucide-react';
+import { soundFx } from '../utils/soundEffects';
 
 interface SuperEventModalProps {
   event: Event | null;
@@ -9,69 +10,102 @@ interface SuperEventModalProps {
 }
 
 export const SuperEventModal: React.FC<SuperEventModalProps> = ({ event, isOpen, onClose }) => {
+  useEffect(() => {
+    if (isOpen && event) {
+      soundFx.playEventPopup();
+    }
+  }, [isOpen, event]);
+
   if (!isOpen || !event) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn select-none">
       {/* Cinematic Vignette Overlay */}
-      <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_150px_rgba(0,0,0,0.9)]" />
+      <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_150px_rgba(0,0,0,0.95)]" />
 
-      {/* Main Super Event Stage Panel */}
-      <div className="relative w-full max-w-2xl bg-gradient-to-b from-slate-900 via-[#161a22] to-slate-950 border-2 border-strategy-gold/80 rounded-2xl shadow-[0_0_50px_rgba(217,119,6,0.35)] overflow-hidden flex flex-col">
-        {/* Top Header Banner */}
-        <div className="relative px-8 py-5 border-b border-strategy-gold/40 bg-slate-950/90 text-center flex flex-col items-center">
+      {/* HOI4 World News Newspaper Stage (素材图 1 真实世界新闻报纸) */}
+      <div className="relative w-full max-w-2xl hoi4-newspaper rounded-sm shadow-[0_25px_60px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col border-4 border-[#8c7b60]">
+        {/* Top Newspaper Masthead (双重分割线报头) */}
+        <div className="px-8 pt-5 pb-3 text-center relative border-b-2 border-[#5c4e3a]">
           <button
             type="button"
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 text-slate-500 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition"
-            title="关闭演出"
+            onClick={() => {
+              soundFx.playClick();
+              onClose();
+            }}
+            className="absolute top-4 right-4 p-1 text-[#5c4e3a] hover:text-black rounded transition"
+            title="关闭通报"
           >
             <X className="w-5 h-5" />
           </button>
 
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-rose-950/80 border border-rose-600 text-rose-300 text-[11px] font-mono uppercase tracking-widest mb-2 shadow">
-            <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-            <span>命运转折 · 超事件演播</span>
+          {/* Newspaper Title */}
+          <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-widest text-[#5c4e3a] border-b border-[#8c7b60] pb-1 mb-2">
+            <span>EXTRA EDITION · 命运特辑</span>
+            <span className="font-bold flex items-center space-x-1">
+              <Calendar className="w-3.5 h-3.5 text-[#5c4e3a]" />
+              <span>{event.occurred_on || '1936.01.01'}</span>
+            </span>
+            <span>ISSUE NO. 104</span>
           </div>
 
-          <h2 className="text-2xl font-serif font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-strategy-gold tracking-wide">
-            {event.title}
-          </h2>
-
-          <div className="flex items-center space-x-1 text-xs font-mono text-slate-400 mt-2">
-            <Calendar className="w-3.5 h-3.5 text-strategy-gold" />
-            <span>发生日期：{event.occurred_on}</span>
+          <h1 className="text-3xl font-serif font-black tracking-widest text-[#1a140d] uppercase drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]">
+            WORLD NEWS · 世界要闻
+          </h1>
+          <div className="text-[10px] font-serif italic text-[#5c4e3a] mt-0.5">
+            — 全球战局走向与重大人生命运转折实录 —
           </div>
         </div>
 
-        {/* Content Body */}
-        <div className="px-8 py-6 space-y-5 overflow-y-auto max-h-[60vh]">
+        {/* Headline Banner */}
+        <div className="px-8 py-3 bg-[#cfc2a9]/50 border-b border-[#a8987d] text-center">
+          <h2 className="text-xl font-serif font-black text-[#140f09] tracking-wide leading-snug">
+            {event.title}
+          </h2>
+        </div>
+
+        {/* Content Body: Newspaper Photo & Story */}
+        <div className="px-8 py-5 space-y-4 overflow-y-auto max-h-[60vh]">
+          {/* Vintage Monochromatic Press Photo Box (素材图 1 照片框) */}
+          <div className="hoi4-news-photo-frame p-1 rounded-xs flex flex-col items-center justify-center bg-[#2b251d] text-center">
+            <div className="w-full h-36 bg-gradient-to-br from-[#3b3226] to-[#1a1713] flex flex-col items-center justify-center p-4 border border-[#443828]">
+              <Newspaper className="w-12 h-12 text-[#9c8970] mb-2 opacity-80" />
+              <span className="text-xs font-serif font-bold text-[#cfc2a9] tracking-wider uppercase">
+                STRATEGIC PRESS WIRE
+              </span>
+              <span className="text-[10px] font-mono text-[#8a7962]">
+                现场战况通讯社发回电报记录
+              </span>
+            </div>
+          </div>
+
           {/* Quote Banner */}
           {event.quote && (
-            <div className="relative p-4 rounded-xl bg-slate-950/80 border-l-4 border-strategy-gold border-y border-r border-slate-800 shadow-inner">
-              <Quote className="w-6 h-6 text-strategy-gold/30 absolute top-2 right-3" />
-              <p className="font-serif italic text-sm text-amber-200/90 leading-relaxed pr-6">
+            <div className="relative p-3 bg-[#c9bba0]/40 border-l-4 border-[#5c4e3a] border-y border-r border-[#a8987d] shadow-inner">
+              <Quote className="w-5 h-5 text-[#5c4e3a]/40 absolute top-2 right-2" />
+              <p className="font-serif italic text-sm text-[#261d13] font-bold leading-relaxed pr-5">
                 “{event.quote}”
               </p>
             </div>
           )}
 
           {/* Event Narrative Body */}
-          <div className="p-4 bg-slate-900/60 rounded-xl border border-slate-800/80">
-            <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap font-serif">
-              {event.body_md || '重大人生命运在此刻发生重大变迁与历史收束...'}
-            </p>
+          <div className="text-sm text-[#1f1911] leading-relaxed font-serif text-justify indent-8 space-y-2">
+            <p>{event.body_md || '重大人生命运在此刻发生重大变迁与历史收束...'}</p>
           </div>
         </div>
 
-        {/* Cinematic Decision Footer */}
-        <div className="px-8 py-4 bg-slate-950 border-t border-strategy-gold/30 flex items-center justify-center">
+        {/* Classic HOI4 News Decision Footer */}
+        <div className="px-8 py-4 bg-[#c8baa0] border-t-2 border-[#5c4e3a] flex items-center justify-center">
           <button
             type="button"
-            onClick={onClose}
-            className="w-full sm:w-auto px-10 py-2.5 bg-gradient-to-r from-amber-600 via-strategy-gold to-amber-500 hover:brightness-110 text-slate-950 font-serif font-bold text-sm tracking-widest rounded-xl transition shadow-[0_0_20px_rgba(217,119,6,0.3)] uppercase"
+            onClick={() => {
+              soundFx.playStamp();
+              onClose();
+            }}
+            className="hoi4-btn-military w-full sm:w-auto px-12 py-2.5 rounded text-sm font-serif font-bold tracking-widest uppercase transition shadow-lg"
           >
-            时代的车轮滚滚向前 · 确认
+            历史的车轮滚滚向前 · 确认
           </button>
         </div>
       </div>
