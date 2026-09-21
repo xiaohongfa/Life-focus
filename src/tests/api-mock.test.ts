@@ -147,6 +147,51 @@ describe('Browser Mock Contract & Operations', () => {
     expect(first.source_focus_id < first.target_focus_id).toBe(true);
   });
 
+  it('supports updating focus title and disconnecting relations', () => {
+    const life = mockHandler<Life>('create_life', { name: '断开连接与改名测试人生' });
+    const a = mockHandler<{ id: string; title: string }>('create_focus', {
+      lifeId: life.id,
+      title: '旧国策番号',
+      status: 'active',
+      positionX: 0,
+      positionY: 0,
+    });
+    const b = mockHandler<{ id: string }>('create_focus', {
+      lifeId: life.id,
+      title: '后续国策',
+      status: 'active',
+      positionX: 100,
+      positionY: 100,
+    });
+
+    // 1. Update focus title
+    mockHandler('update_focus_content', {
+      lifeId: life.id,
+      focusId: a.id,
+      title: '已重命名的宏观战略国策',
+      bodyMd: '详尽规划',
+    });
+    const foci = mockHandler<{ id: string; title: string }[]>('get_foci', { lifeId: life.id });
+    expect(foci.find((f) => f.id === a.id)?.title).toBe('已重命名的宏观战略国策');
+
+    // 2. Add relation and then delete (disconnect)
+    const rel = mockHandler<{ id: string }>('add_focus_relation', {
+      lifeId: life.id,
+      sourceId: a.id,
+      targetId: b.id,
+      relationType: 'prerequisite',
+    });
+    const relsBefore = mockHandler<any[]>('get_focus_relations', { lifeId: life.id });
+    expect(relsBefore.some((r) => r.id === rel.id)).toBe(true);
+
+    mockHandler('delete_focus_relation', {
+      lifeId: life.id,
+      relationId: rel.id,
+    });
+    const relsAfter = mockHandler<any[]>('get_focus_relations', { lifeId: life.id });
+    expect(relsAfter.some((r) => r.id === rel.id)).toBe(false);
+  });
+
   it('supports focus essay mounting, query and detachment', () => {
     const life = mockHandler<Life>('create_life', { name: '随笔挂载测试人生' });
     const focus = mockHandler<{ id: string }>('create_focus', {

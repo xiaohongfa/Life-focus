@@ -39,6 +39,7 @@ import {
   Unlink,
   ExternalLink,
   Zap,
+  Pencil,
 } from 'lucide-react';
 import {
   generateNextFocusProposals,
@@ -301,14 +302,16 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
             sourceHandle: isMutual ? 'source-right' : 'source-bottom',
             targetHandle: isMutual ? 'target-left' : 'target-top',
             animated: isMutual,
+            interactionWidth: 28,
             style: {
               stroke: isMutual ? '#ef4444' : '#64748b',
               strokeWidth: isMutual ? 2.5 : 2,
               strokeDasharray: isMutual ? '6,6' : undefined,
+              cursor: 'pointer',
             },
-            label: isMutual ? '< ! >' : undefined,
-            labelStyle: { fill: '#f87171', fontSize: 11, fontWeight: '900', fontFamily: 'monospace' },
-            labelBgStyle: { fill: '#181b20', fillOpacity: 0.95, rx: 3, stroke: '#ef4444', strokeWidth: 1.5 },
+            label: isMutual ? '⚡ 互斥 (点击断开)' : undefined,
+            labelStyle: { fill: '#f87171', fontSize: 10, fontWeight: 'bold', fontFamily: 'monospace', cursor: 'pointer' },
+            labelBgStyle: { fill: '#181b20', fillOpacity: 0.95, rx: 3, stroke: '#ef4444', strokeWidth: 1.5, cursor: 'pointer' },
             labelBgPadding: [6, 3] as [number, number],
             markerEnd: isMutual
               ? undefined
@@ -416,12 +419,32 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
       setFoci(updatedFoci);
       syncNodesFromFoci(updatedFoci);
       setSaveStatus('saved');
+      toast.success(`国策「${editTitle.trim()}」修改已保存`);
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err: unknown) {
       console.error('Failed to save focus content', err);
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`保存国策内容失败: ${msg}`);
       setSaveStatus('idle');
+    }
+  };
+
+  // 断开两个国策节点之间的路线连接 (前置依赖或互斥)
+  const handleDisconnectRelation = async (relationId: string, label?: string) => {
+    const rel = relations.find((r) => r.id === relationId);
+    if (!rel) return;
+    try {
+      soundFx.playVoid();
+      await api.deleteFocusRelation(lifeId, rel.id);
+      const nextRels = relations.filter((r) => r.id !== rel.id);
+      setRelations(nextRels);
+      syncEdgesFromRelations(nextRels);
+      setUndoStack((prev) => [...prev, { type: 'DELETE_RELATION', relation: rel }]);
+      toast.info(`已断开路线连接${label ? ` (${label})` : ''}，支持 Ctrl+Z 撤销`);
+    } catch (err: unknown) {
+      console.error('Failed to disconnect relation', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`断开连接失败: ${msg}`);
     }
   };
 
@@ -896,6 +919,11 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
     return relations.filter((r) => r.target_focus_id === selectedFocus.id && r.relation_type === 'prerequisite');
   }, [relations, selectedFocus]);
 
+  const currentOutgoing = useMemo(() => {
+    if (!selectedFocus) return [];
+    return relations.filter((r) => r.source_focus_id === selectedFocus.id && r.relation_type === 'prerequisite');
+  }, [relations, selectedFocus]);
+
 
   const currentMutuallyExclusive = useMemo(() => {
     if (!selectedFocus) return [];
@@ -1007,6 +1035,18 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
           autoPanOnConnect={false}
           nodesDraggable={true}
           preventScrolling={false}
+          edgesFocusable={true}
+          deleteKeyCode={['Backspace', 'Delete']}
+          onEdgeClick={(_e, edge) => {
+            const rel = relations.find((r) => r.id === edge.id);
+            if (!rel) return;
+            const src = foci.find((f) => f.id === rel.source_focus_id)?.title || '前置国策';
+            const tgt = foci.find((f) => f.id === rel.target_focus_id)?.title || '目标国策';
+            const relTypeDesc = rel.relation_type === 'mutually_exclusive' ? '互斥排他限制' : '前置依赖路线';
+            if (window.confirm(`确定要断开从「${src}」到「${tgt}」的${relTypeDesc}吗？\n断开后可随时在沙盘重新连线，也支持按 Ctrl+Z 撤销。`)) {
+              handleDisconnectRelation(rel.id, `${src} ➔ ${tgt}`);
+            }
+          }}
         >
           <Background color="#475569" gap={32} size={1} style={{ opacity: 0.16 }} />
           <Controls
@@ -1129,10 +1169,25 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
                 </span>
               </div>
 
-              {/* 居中加大纯白标题：字体高对比度，清晰易读 */}
-              <h3 className="font-serif font-black text-sm uppercase tracking-widest text-[#ffffff] text-center drop-shadow-[0_1px_2px_rgba(0,0,0,1)] truncate max-w-md px-2">
-                {selectedFocus.title}
-              </h3>
+              {/* 居中标题：支持直接点击修改 */}
+              <div className="flex-1 max-w-sm mx-3 relative group flex items-center justify-center">
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onBlur={handleSaveNodeContent}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      (e.target as HTMLInputElement).blur();
+                      handleSaveNodeContent();
+                    }
+                  }}
+                  className="w-full bg-[#0d1013]/60 hover:bg-[#0d1013] focus:bg-[#0d1013] border border-transparent hover:border-[#475466] focus:border-[#d4af37] rounded px-3 py-0.5 text-center font-serif font-black text-sm uppercase tracking-widest text-[#ffffff] drop-shadow-[0_1px_2px_rgba(0,0,0,1)] transition outline-none"
+                  placeholder="国策番号与名称..."
+                  title="点击可直接修改标题，回车或失焦自动保存"
+                />
+                <Pencil className="w-3.5 h-3.5 text-[#94a3b8] group-hover:text-amber-300 absolute right-2 pointer-events-none transition opacity-60 group-hover:opacity-100" />
+              </div>
 
               {/* 右上角方形古铜十字叉关闭按钮 */}
               <button
@@ -1322,48 +1377,103 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
                 <div className="col-span-8 hoi4-inset-panel p-3 rounded-sm min-h-[110px] flex flex-col justify-center space-y-2 text-xs font-sans">
                   {/* 前置需求 */}
                   <div className="flex items-start space-x-2">
-                    <span className="text-emerald-400 font-bold">✔</span>
-                    <span className="text-[#d1d5db]">
+                    <span className="text-emerald-400 font-bold shrink-0">✔</span>
+                    <div className="text-[#d1d5db] flex-1">
                       {currentIncoming.length === 0 ? (
                         <span>
                           前置战略需求：
                           <strong className="text-[#fef08a] font-bold">无前置依赖条件 (起点根基)</strong>
                         </span>
                       ) : (
-                        <span>
-                          前置战略需求：
-                          {currentIncoming.map((r, i) => {
-                            const src = foci.find((f) => f.id === r.source_focus_id);
+                        <div className="space-y-1">
+                          <span className="text-[#94a3b8]">前置战略需求:</span>
+                          <div className="flex flex-wrap gap-1.5 mt-0.5">
+                            {currentIncoming.map((r) => {
+                              const src = foci.find((f) => f.id === r.source_focus_id);
+                              return (
+                                <span
+                                  key={r.id}
+                                  className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-[#1c222a] border border-[#3b4756] text-[#fbbf24] text-[11px]"
+                                >
+                                  <span className="font-bold">{src?.title || '未知国策'}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDisconnectRelation(r.id, src?.title || '未知国策')}
+                                    className="text-rose-400 hover:text-rose-100 hover:bg-rose-900/80 rounded px-1 font-mono font-bold transition cursor-pointer"
+                                    title="断开此前置依赖连线"
+                                  >
+                                    ✕ 断开
+                                  </button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 后续解锁路线需求 */}
+                  {currentOutgoing.length > 0 && (
+                    <div className="flex items-start space-x-2">
+                      <span className="text-sky-400 font-bold shrink-0">➜</span>
+                      <div className="text-[#d1d5db] flex-1">
+                        <span className="text-[#94a3b8]">后续推进路线:</span>
+                        <div className="flex flex-wrap gap-1.5 mt-0.5">
+                          {currentOutgoing.map((r) => {
+                            const tgt = foci.find((f) => f.id === r.target_focus_id);
                             return (
-                              <span key={r.id} className="text-[#fbbf24] font-bold">
-                                {i > 0 ? '、' : ' '}
-                                {src?.title || '未知国策'}
+                              <span
+                                key={r.id}
+                                className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-[#13202e] border border-sky-800/80 text-sky-200 text-[11px]"
+                              >
+                                <span className="font-bold">{tgt?.title || '未知国策'}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDisconnectRelation(r.id, tgt?.title || '未知国策')}
+                                  className="text-rose-400 hover:text-rose-100 hover:bg-rose-900/80 rounded px-1 font-mono font-bold transition cursor-pointer"
+                                  title="断开指向此后置国策的连线"
+                                >
+                                  ✕ 断开
+                                </button>
                               </span>
                             );
                           })}
-                        </span>
-                      )}
-                    </span>
-                  </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* 互斥警告 (Mutually exclusive with...) */}
                   {currentMutuallyExclusive.length > 0 ? (
                     <div className="flex items-start space-x-2 text-rose-400">
-                      <span className="font-bold text-amber-400">⚠️</span>
-                      <span>
-                        互斥排他战线：
-                        {currentMutuallyExclusive.map((r, i) => {
-                          const otherId =
-                            r.source_focus_id === selectedFocus.id ? r.target_focus_id : r.source_focus_id;
-                          const other = foci.find((f) => f.id === otherId);
-                          return (
-                            <strong key={r.id} className="text-[#fbbf24] font-bold underline ml-1">
-                              {i > 0 ? '、' : ''}
-                              {other?.title || '未知国策'}
-                            </strong>
-                          );
-                        })}
-                      </span>
+                      <span className="font-bold text-amber-400 shrink-0">⚠️</span>
+                      <div className="flex-1">
+                        <span className="text-rose-300">互斥排他战线:</span>
+                        <div className="flex flex-wrap gap-1.5 mt-0.5">
+                          {currentMutuallyExclusive.map((r) => {
+                            const otherId =
+                              r.source_focus_id === selectedFocus.id ? r.target_focus_id : r.source_focus_id;
+                            const other = foci.find((f) => f.id === otherId);
+                            return (
+                              <span
+                                key={r.id}
+                                className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-rose-950/50 border border-rose-800/80 text-rose-200 text-[11px]"
+                              >
+                                <span className="font-bold">{other?.title || '未知国策'}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDisconnectRelation(r.id, other?.title || '未知国策')}
+                                  className="text-rose-300 hover:text-white hover:bg-rose-900 rounded px-1 font-mono font-bold transition cursor-pointer"
+                                  title="解除此互斥限制"
+                                >
+                                  ✕ 解除互斥
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="flex items-center space-x-2 text-[#94a3b8]">
@@ -1417,6 +1527,28 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
                       <span>{saveStatus === 'saved' ? '已保存' : saveStatus === 'saving' ? '保存中...' : '保存修改'}</span>
                     </button>
                   </div>
+                </div>
+
+                {/* 国策标题番号输入框 */}
+                <div className="space-y-1 pb-1">
+                  <div className="flex items-center justify-between text-[10.5px] font-mono font-bold text-[#94a3b8]">
+                    <span>国策番号与名称:</span>
+                    {editTitle !== selectedFocus.title && (
+                      <span className="text-amber-400 text-[10px] animate-pulse font-sans font-bold">● 标题已更改 (点击保存或回车生效)</span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSaveNodeContent();
+                      }
+                    }}
+                    placeholder="输入国策名称与番号..."
+                    className="w-full bg-[#0d1013] border border-[#373e47] hover:border-[#4f5b6b] focus:border-[#d4af37] rounded px-3 py-1.5 text-xs text-[#ffffff] font-serif font-bold placeholder-[#64748b] focus:outline-none transition"
+                  />
                 </div>
 
                 {/* 高对比度纯白正文 */}
