@@ -13,6 +13,7 @@ import {
   Wrench,
   GraduationCap,
   Trophy,
+  Zap,
 } from 'lucide-react';
 import { soundFx } from '../../utils/soundEffects';
 
@@ -21,6 +22,7 @@ export interface FocusNodeData {
   onSelectNode: (focus: Focus) => void;
   onOpenSubFocus?: (focus: Focus) => void;
   subCount?: { total: number; done: number };
+  essayCount?: number;
 }
 
 // 智能提取国策徽章中心象征图案 (匹配 HOI4 军政企社各领域)
@@ -87,6 +89,55 @@ const statusConfig: Record<
   },
 };
 
+// 遭遇型国策专属警戒配色 (HOI4 Hazard / Encounter Style)
+const encounterStatusConfig: Record<
+  FocusStatus,
+  {
+    wreathColor: string;
+    wreathGlow: string;
+    innerRing: string;
+    statusText: string;
+    statusColor: string;
+    badgeBorder: string;
+    stampBadge?: string;
+  }
+> = {
+  active: {
+    wreathColor: 'text-[#f97316]',
+    wreathGlow: 'animate-radar-pulse drop-shadow-[0_0_12px_rgba(249,115,22,0.95)]',
+    innerRing: 'border-orange-500/90 bg-[#2b1408]',
+    statusText: '⚡ 突发遭遇',
+    statusColor: 'text-orange-400 font-black',
+    badgeBorder: 'border-orange-500/80',
+  },
+  completed: {
+    wreathColor: 'text-[#fbbf24]',
+    wreathGlow: 'animate-golden-aura drop-shadow-[0_0_12px_rgba(245,158,11,0.85)]',
+    innerRing: 'border-[#f59e0b] bg-[#291f0c]',
+    statusText: '★ 遭遇化解',
+    statusColor: 'text-amber-300 font-bold',
+    badgeBorder: 'border-[#d4af37]',
+    stampBadge: '化解',
+  },
+  paused: {
+    wreathColor: 'text-[#d97706]',
+    wreathGlow: 'drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]',
+    innerRing: 'border-amber-700/60 bg-[#1f1810]',
+    statusText: '⏳ 暂缓处置',
+    statusColor: 'text-amber-500',
+    badgeBorder: 'border-amber-700/50',
+  },
+  revoked: {
+    wreathColor: 'text-[#71717a]',
+    wreathGlow: 'grayscale opacity-75',
+    innerRing: 'border-zinc-700 bg-[#18181b]',
+    statusText: '✕ 遭遇中止',
+    statusColor: 'text-rose-400 line-through',
+    badgeBorder: 'border-zinc-700',
+    stampBadge: '中止',
+  },
+};
+
 export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
   const nodeData = data as unknown as FocusNodeData;
   const focus = nodeData?.focus;
@@ -96,9 +147,12 @@ export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
     return null;
   }
 
+  const isEncounter = focus.icon === 'encounter';
   const status = (focus.status || 'active') as FocusStatus;
-  const cfg = statusConfig[status] || statusConfig.active;
-  const EmblemIcon = getFocusEmblem(focus.title);
+  const cfg = isEncounter
+    ? encounterStatusConfig[status] || encounterStatusConfig.active
+    : statusConfig[status] || statusConfig.active;
+  const EmblemIcon = isEncounter ? Zap : getFocusEmblem(focus.title);
   const subCount = nodeData?.subCount;
 
   const handleClick = () => {
@@ -111,6 +165,7 @@ export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
   return (
     <div
       onClick={handleClick}
+      onMouseEnter={() => soundFx.playHover()}
       className="relative flex flex-col items-center select-none cursor-pointer group transition duration-200 hover:scale-105"
       style={{ width: 154 }}
     >
@@ -138,19 +193,41 @@ export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
               <stop offset="60%" stopColor="#6b7280" />
               <stop offset="100%" stopColor="#374151" />
             </linearGradient>
+            <linearGradient id={`orangeGrad-${focus.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#fed7aa" />
+              <stop offset="35%" stopColor="#f97316" />
+              <stop offset="70%" stopColor="#ea580c" />
+              <stop offset="100%" stopColor="#9a3412" />
+            </linearGradient>
           </defs>
 
           {/* 左侧月桂叶枝 */}
           <path
             d="M 50 90 C 25 86 10 65 14 42 C 16 30 26 18 38 12 C 34 20 33 30 38 38 C 30 34 22 44 26 54 C 22 58 24 70 34 76 C 38 78 44 84 50 90 Z"
-            fill={status === 'revoked' ? `url(#ironGrad-${focus.id})` : status === 'active' ? `url(#emeraldGrad-${focus.id})` : `url(#goldGrad-${focus.id})`}
+            fill={
+              status === 'revoked'
+                ? `url(#ironGrad-${focus.id})`
+                : isEncounter
+                ? `url(#orangeGrad-${focus.id})`
+                : status === 'active'
+                ? `url(#emeraldGrad-${focus.id})`
+                : `url(#goldGrad-${focus.id})`
+            }
             stroke="#261b05"
             strokeWidth="1"
           />
           {/* 右侧月桂叶枝 */}
           <path
             d="M 50 90 C 75 86 90 65 86 42 C 84 30 74 18 62 12 C 66 20 67 30 62 38 C 70 34 78 44 74 54 C 78 58 76 70 66 76 C 62 78 56 84 50 90 Z"
-            fill={status === 'revoked' ? `url(#ironGrad-${focus.id})` : status === 'active' ? `url(#emeraldGrad-${focus.id})` : `url(#goldGrad-${focus.id})`}
+            fill={
+              status === 'revoked'
+                ? `url(#ironGrad-${focus.id})`
+                : isEncounter
+                ? `url(#orangeGrad-${focus.id})`
+                : status === 'active'
+                ? `url(#emeraldGrad-${focus.id})`
+                : `url(#goldGrad-${focus.id})`
+            }
             stroke="#261b05"
             strokeWidth="1"
           />
@@ -166,6 +243,8 @@ export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
             className={`w-6 h-6 ${
               status === 'completed'
                 ? 'text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]'
+                : isEncounter
+                ? 'text-orange-400 drop-shadow-[0_0_8px_rgba(249,115,22,0.95)] animate-pulse'
                 : status === 'active'
                 ? 'text-emerald-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]'
                 : 'text-slate-300'
@@ -220,6 +299,15 @@ export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
                 {subCount.done}/{subCount.total}
               </span>
             )}
+            {nodeData?.essayCount && nodeData.essayCount > 0 ? (
+              <span
+                className="text-[8px] font-mono px-1 py-0.2 rounded-sm bg-[#0a0d10] border border-[#3b4452] text-amber-200 font-bold shadow-inner flex items-center space-x-0.5"
+                title={`已挂载 ${nodeData.essayCount} 篇战地随笔`}
+              >
+                <span>📜</span>
+                <span>{nodeData.essayCount}</span>
+              </span>
+            ) : null}
           </div>
         </div>
       </div>

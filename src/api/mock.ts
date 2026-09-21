@@ -20,6 +20,7 @@ import type {
   FocusSubItem,
   StaffMember,
   StaffMeeting,
+  ObjectLink,
 } from './types';
 import { hasDirectedPath, resolveActiveEquippedTraits } from '../domain/traits';
 import { hasDirectedFocusPath, normalizeMutualFocusEndpoints } from '../domain/focus';
@@ -43,6 +44,7 @@ export interface MockStore {
   philosophies: Record<string, Philosophy>;
   stability: Record<string, { current: number | null; history: StabilityChange[] }>;
   snapshots: WorldSnapshot[];
+  objectLinks?: ObjectLink[];
 }
 
 const DEFAULT_LIFE_ID = 'mock-life-1';
@@ -1083,6 +1085,64 @@ export function mockHandler<T>(cmd: string, args?: Record<string, unknown>): T {
     requireOwned(mockData.subFoci, args?.subId as string, args?.lifeId as string, '子国策');
     mockData.subFoci = mockData.subFoci.filter((s) => s.id !== args?.subId);
     return undefined as unknown as T;
+  }
+
+  // ==================== FOCUS ESSAY MOUNT ====================
+  if (cmd === 'get_focus_essays') {
+    const focusId = args?.focusId as string;
+    const lifeId = args?.lifeId as string;
+    const links = (mockData.objectLinks || []).filter(
+      (l) => l.life_id === lifeId && l.source_type === 'focus' && l.source_id === focusId && l.target_type === 'essay'
+    );
+    const essayIds = new Set(links.map((l) => l.target_id));
+    return mockData.essays.filter((e) => essayIds.has(e.id)) as T;
+  }
+
+  if (cmd === 'attach_essay_to_focus') {
+    const lifeId = args?.lifeId as string;
+    const focusId = args?.focusId as string;
+    const essayId = args?.essayId as string;
+    if (!mockData.objectLinks) mockData.objectLinks = [];
+    let link = mockData.objectLinks.find(
+      (l) => l.life_id === lifeId && l.source_type === 'focus' && l.source_id === focusId && l.target_type === 'essay' && l.target_id === essayId
+    );
+    if (!link) {
+      link = {
+        id: nextMockId('link'),
+        life_id: lifeId,
+        source_type: 'focus',
+        source_id: focusId,
+        target_type: 'essay',
+        target_id: essayId,
+        kind: 'mount',
+        created_at: currentTimestamp,
+      };
+      mockData.objectLinks.push(link);
+    }
+    return link as T;
+  }
+
+  if (cmd === 'detach_essay_from_focus') {
+    const lifeId = args?.lifeId as string;
+    const focusId = args?.focusId as string;
+    const essayId = args?.essayId as string;
+    if (mockData.objectLinks) {
+      mockData.objectLinks = mockData.objectLinks.filter(
+        (l) => !(l.life_id === lifeId && l.source_type === 'focus' && l.source_id === focusId && l.target_type === 'essay' && l.target_id === essayId)
+      );
+    }
+    return undefined as unknown as T;
+  }
+
+  if (cmd === 'get_all_focus_essay_counts') {
+    const lifeId = args?.lifeId as string;
+    const counts: Record<string, number> = {};
+    for (const l of mockData.objectLinks || []) {
+      if (l.life_id === lifeId && l.source_type === 'focus' && l.target_type === 'essay') {
+        counts[l.source_id] = (counts[l.source_id] || 0) + 1;
+      }
+    }
+    return counts as T;
   }
 
   // ==================== STAFF & CABINET ====================

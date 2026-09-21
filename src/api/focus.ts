@@ -5,6 +5,8 @@ import type {
   FocusStatus,
   FocusStatusHistory,
   FocusSubItem,
+  Essay,
+  ObjectLink,
 } from './types';
 
 export const focusApi = {
@@ -95,4 +97,14 @@ export const focusApi = {
     tauriInvoke<void>('update_sub_focus_status', { lifeId, subId, status }),
   deleteSubFocus: (lifeId: string, subId: string) =>
     tauriInvoke<void>('delete_sub_focus', { lifeId, subId }),
+
+  // Focus Mounted Essays (随笔挂载)
+  getFocusEssays: (lifeId: string, focusId: string) =>
+    tauriInvoke<Essay[]>('get_focus_essays', { lifeId, focusId }),
+  attachEssayToFocus: (lifeId: string, focusId: string, essayId: string) =>
+    tauriInvoke<ObjectLink>('attach_essay_to_focus', { lifeId, focusId, essayId }),
+  detachEssayFromFocus: (lifeId: string, focusId: string, essayId: string) =>
+    tauriInvoke<void>('detach_essay_from_focus', { lifeId, focusId, essayId }),
+  getAllFocusEssayCounts: (lifeId: string) =>
+    tauriInvoke<Record<string, number>>('get_all_focus_essay_counts', { lifeId }),
 };

@@ -15,10 +15,11 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import type { Focus, FocusRelation, FocusStatus, FocusStatusHistory } from '../../api/types';
+import type { Focus, FocusRelation, FocusStatus, FocusStatusHistory, Essay } from '../../api/types';
 import { api } from '../../api/client';
 import { FocusNode, FocusNodeData } from './FocusNode';
 import { SubFocusModal } from './SubFocusModal';
+import { EssayModal } from '../../components/EssayModal';
 import { MarkdownEditor } from '../../components/MarkdownEditor';
 import { soundFx } from '../../utils/soundEffects';
 import {
@@ -33,6 +34,11 @@ import {
   ListTodo,
   Maximize2,
   Coins,
+  BookOpen,
+  Link,
+  Unlink,
+  ExternalLink,
+  Zap,
 } from 'lucide-react';
 import {
   generateNextFocusProposals,
@@ -85,6 +91,8 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
   const [newTitle, setNewTitle] = useState('');
   const [newBodyMd, setNewBodyMd] = useState('');
   const [newStatus, setNewStatus] = useState<FocusStatus>('active');
+  const [newIcon, setNewIcon] = useState<string>('');
+  const [parentFocusForCreation, setParentFocusForCreation] = useState<Focus | null>(null);
 
   // Drawer edit mode
   const [editTitle, setEditTitle] = useState('');
@@ -118,6 +126,16 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
   const [refineModalOpen, setRefineModalOpen] = useState(false);
   const [refinedTextProposal, setRefinedTextProposal] = useState('');
 
+  // 挂载随笔状态 (Focus Essay Mounting)
+  const [focusEssays, setFocusEssays] = useState<Essay[]>([]);
+  const [allLifeEssays, setAllLifeEssays] = useState<Essay[]>([]);
+  const [showAttachDropdown, setShowAttachDropdown] = useState(false);
+  const [showEssayModal, setShowEssayModal] = useState(false);
+  const [editingEssay, setEditingEssay] = useState<Essay | null>(null);
+  const [isNewEssayForFocus, setIsNewEssayForFocus] = useState(false);
+  const [, setEssayCounts] = useState<Record<string, number>>({});
+  const essayCountsRef = useRef<Record<string, number>>({});
+
   // Sub-Focus Checklist state
   const [subFocusModalTarget, setSubFocusModalTarget] = useState<Focus | null>(null);
   const [isSubFocusModalOpen, setIsSubFocusModalOpen] = useState(false);
@@ -134,19 +152,31 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
     setSelectedFocus(focus);
     setEditTitle(focus.title);
     setEditBodyMd(focus.body_md);
+    setShowAttachDropdown(false);
     try {
-      const history = await api.getFocusHistory(lifeId, focus.id);
+      const [history, essays, lifeEssays] = await Promise.all([
+        api.getFocusHistory(lifeId, focus.id).catch(() => []),
+        api.getFocusEssays(lifeId, focus.id).catch(() => []),
+        api.getEssays(lifeId).catch(() => []),
+      ]);
       setFocusHistory(history);
+      setFocusEssays(essays);
+      setAllLifeEssays(lifeEssays);
     } catch (err) {
-      console.error('Failed to load node history', err);
+      console.error('Failed to load node history or essays', err);
     }
   }, [lifeId]);
 
   // 将领域 Focus 集合同步转换为 React Flow 节点，保留已测量尺寸与初始宽高，杜绝 visibility: hidden
   // 不直接依赖 subCounts state，避免循环渲染
   const syncNodesFromFoci = useCallback(
-    (fociList: Focus[], counts?: Record<string, { total: number; done: number }>) => {
+    (
+      fociList: Focus[],
+      counts?: Record<string, { total: number; done: number }>,
+      essayCountsMap?: Record<string, number>
+    ) => {
       const activeCounts = counts || subCountsRef.current;
+      const activeEssayCounts = essayCountsMap || essayCountsRef.current;
       setNodes((prevNodes) => {
         const prevMap = new Map(prevNodes.map((n) => [n.id, n]));
         return fociList.map((f) => {
@@ -163,6 +193,7 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
               onSelectNode: handleSelectNode,
               onOpenSubFocus: handleOpenSubFocus,
               subCount: activeCounts[f.id],
+              essayCount: activeEssayCounts[f.id] || 0,
             },
           };
         });
@@ -170,6 +201,92 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
     },
     [handleSelectNode, handleOpenSubFocus, setNodes]
   );
+
+  // 刷新当前国策挂载的随笔与角标计数
+  const refreshFocusEssays = useCallback(
+    async (focusId: string) => {
+      try {
+        const [essays, lifeEssays, counts] = await Promise.all([
+          api.getFocusEssays(lifeId, focusId).catch(() => []),
+          api.getEssays(lifeId).catch(() => []),
+          api.getAllFocusEssayCounts(lifeId).catch(() => ({})),
+        ]);
+        setFocusEssays(essays);
+        setAllLifeEssays(lifeEssays);
+        essayCountsRef.current = counts;
+        setEssayCounts(counts);
+        syncNodesFromFoci(foci, subCountsRef.current, counts);
+      } catch (err) {
+        console.error('Failed to refresh focus essays', err);
+      }
+    },
+    [lifeId, foci, syncNodesFromFoci]
+  );
+
+  const handleDetachEssay = async (essayId: string, essayTitle: string) => {
+    if (!selectedFocus) return;
+    if (!window.confirm(`确定将随笔「${essayTitle}」从该国策中解除挂载吗？（随笔本身仍完好保留在档案库中）`)) return;
+    try {
+      soundFx.playVoid();
+      await api.detachEssayFromFocus(lifeId, selectedFocus.id, essayId);
+      toast.info(`已解除随笔「${essayTitle}」的挂载`);
+      await refreshFocusEssays(selectedFocus.id);
+    } catch (err: any) {
+      toast.error(`解除挂载失败: ${err.message || String(err)}`);
+    }
+  };
+
+  const handleAttachExistingEssay = async (essayId: string) => {
+    if (!selectedFocus || !essayId) return;
+    try {
+      soundFx.playStamp();
+      await api.attachEssayToFocus(lifeId, selectedFocus.id, essayId);
+      toast.success('已成功挂载随笔');
+      setShowAttachDropdown(false);
+      await refreshFocusEssays(selectedFocus.id);
+    } catch (err: any) {
+      toast.error(`挂载失败: ${err.message || String(err)}`);
+    }
+  };
+
+  const handleOpenCreateEssayForFocus = () => {
+    soundFx.playClick();
+    setEditingEssay(null);
+    setIsNewEssayForFocus(true);
+    setShowEssayModal(true);
+  };
+
+  const handleReadOrEditEssay = (essay: Essay) => {
+    soundFx.playClick();
+    setEditingEssay(essay);
+    setIsNewEssayForFocus(false);
+    setShowEssayModal(true);
+  };
+
+  const handleEssaySaved = async (saved: Essay) => {
+    if (isNewEssayForFocus && selectedFocus) {
+      try {
+        await api.attachEssayToFocus(lifeId, selectedFocus.id, saved.id);
+        toast.success(`新随笔「${saved.title}」已撰写并挂载至国策`);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    setIsNewEssayForFocus(false);
+    setShowEssayModal(false);
+    setEditingEssay(null);
+    if (selectedFocus) {
+      await refreshFocusEssays(selectedFocus.id);
+    }
+  };
+
+  const handleEssayDeleted = async () => {
+    setShowEssayModal(false);
+    setEditingEssay(null);
+    if (selectedFocus) {
+      await refreshFocusEssays(selectedFocus.id);
+    }
+  };
 
   // 将领域关系集合转换为 React Flow 连线
   const syncEdgesFromRelations = useCallback(
@@ -212,11 +329,12 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
     activeLifeIdRef.current = lifeId;
     const currentSeq = ++loadSeqRef.current;
     try {
-      const [fociData, relData, allSubFoci, overview] = await Promise.all([
+      const [fociData, relData, allSubFoci, overview, essayCountsMap] = await Promise.all([
         api.getFoci(lifeId),
         api.getFocusRelations(lifeId),
-        api.listAllSubFoci(lifeId),
+        api.listAllSubFoci(lifeId).catch(() => []),
         api.getWorldOverview(lifeId).catch(() => null),
+        api.getAllFocusEssayCounts(lifeId).catch(() => ({})),
       ]);
 
       if (activeLifeIdRef.current !== lifeId || loadSeqRef.current !== currentSeq) {
@@ -248,10 +366,12 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
         }
       }
       subCountsRef.current = countsMap;
+      essayCountsRef.current = essayCountsMap || {};
       setSubCounts(countsMap);
+      setEssayCounts(essayCountsMap || {});
       setFoci(fociData);
       setRelations(relData);
-      syncNodesFromFoci(fociData, countsMap);
+      syncNodesFromFoci(fociData, countsMap, essayCountsMap || {});
       syncEdgesFromRelations(relData);
 
       // 仅在首次挂载且未居中过时执行一次 fitView，彻底避免拖拽中被动画打断和慢速漂移
@@ -283,7 +403,13 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
     if (!selectedFocus || !editTitle.trim()) return;
     setSaveStatus('saving');
     try {
-      await api.updateFocusContent(lifeId, selectedFocus.id, editTitle.trim(), editBodyMd.trim());
+      await api.updateFocusContent(
+        lifeId,
+        selectedFocus.id,
+        editTitle.trim(),
+        editBodyMd.trim(),
+        selectedFocus.icon || undefined
+      );
       const updated = { ...selectedFocus, title: editTitle.trim(), body_md: editBodyMd.trim() };
       setSelectedFocus(updated);
       const updatedFoci = foci.map((f) => (f.id === selectedFocus.id ? updated : f));
@@ -296,6 +422,30 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`保存国策内容失败: ${msg}`);
       setSaveStatus('idle');
+    }
+  };
+
+  // 切换常规国策与突发遭遇国策类型
+  const toggleEncounterType = async () => {
+    if (!selectedFocus) return;
+    const nextIcon = selectedFocus.icon === 'encounter' ? null : 'encounter';
+    try {
+      await api.updateFocusContent(
+        lifeId,
+        selectedFocus.id,
+        selectedFocus.title,
+        selectedFocus.body_md,
+        nextIcon || undefined
+      );
+      const updated = { ...selectedFocus, icon: nextIcon };
+      setSelectedFocus(updated);
+      const updatedFoci = foci.map((f) => (f.id === selectedFocus.id ? updated : f));
+      setFoci(updatedFoci);
+      syncNodesFromFoci(updatedFoci);
+      toast.success(nextIcon === 'encounter' ? '已标记为【突发遭遇】' : '已转为【常规战略】');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`切换国策类型失败: ${msg}`);
     }
   };
 
@@ -569,7 +719,11 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
     try {
       let posX = 250;
       let posY = 150;
-      if (selectedFocus) {
+      if (parentFocusForCreation) {
+        // If created from an existing parent node
+        posX = parentFocusForCreation.position_x;
+        posY = parentFocusForCreation.position_y + 190;
+      } else if (selectedFocus) {
         // If a focus was selected, place the new focus underneath it as a logical next step
         posX = selectedFocus.position_x;
         posY = selectedFocus.position_y + 190;
@@ -602,14 +756,41 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
         newBodyMd.trim(),
         newStatus,
         posX,
-        posY
+        posY,
+        newIcon || undefined
       );
+
+      if (parentFocusForCreation) {
+        try {
+          const newRel = await api.addFocusRelation(
+            lifeId,
+            parentFocusForCreation.id,
+            created.id,
+            'prerequisite'
+          );
+          const nextRels = [...relations, newRel];
+          setRelations(nextRels);
+          syncEdgesFromRelations(nextRels);
+          setUndoStack((prev) => [
+            ...prev,
+            { type: 'CREATE_NODE', focusId: created.id },
+            { type: 'ADD_RELATION', relation: newRel },
+          ]);
+        } catch (relErr) {
+          console.error('Failed to link parent focus relation', relErr);
+          setUndoStack((prev) => [...prev, { type: 'CREATE_NODE', focusId: created.id }]);
+        }
+      } else {
+        setUndoStack((prev) => [...prev, { type: 'CREATE_NODE', focusId: created.id }]);
+      }
+
       const updatedFoci = [...foci, created];
       setFoci(updatedFoci);
       syncNodesFromFoci(updatedFoci);
-      setUndoStack((prev) => [...prev, { type: 'CREATE_NODE', focusId: created.id }]);
       setNewTitle('');
       setNewBodyMd('');
+      setNewIcon('');
+      setParentFocusForCreation(null);
       setShowCreateModal(false);
       setSelectedFocus(created);
       setEditTitle(created.title);
@@ -725,6 +906,12 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
     );
   }, [relations, selectedFocus]);
 
+  const attachedEssayIds = useMemo(() => new Set(focusEssays.map((e) => e.id)), [focusEssays]);
+  const availableToAttach = useMemo(
+    () => allLifeEssays.filter((e) => !attachedEssayIds.has(e.id)),
+    [allLifeEssays, attachedEssayIds]
+  );
+
   return (
     <div className="relative w-full h-[calc(100vh-80px)] bg-[#121518] overflow-hidden flex flex-col select-none border-t-2 border-[#2b333c]">
       {/* 1. HOI4 原生顶部工业铁轨人字防滑饰条 (Top Chevron Girder Bar matching HOI4 Image 4) */}
@@ -755,6 +942,38 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
           <div className="flex items-center space-x-1.5">
             <span className="text-[#94a3b8]">战略总谱:</span>
             <span className="text-[#f8fafc] font-bold">{foci.length} 项</span>
+          </div>
+
+          <span className="text-slate-600">|</span>
+
+          {/* 常驻显著的新建国策与突发遭遇入口 */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => {
+                soundFx.playClick();
+                setParentFocusForCreation(null);
+                setNewIcon('');
+                setShowCreateModal(true);
+              }}
+              className="hoi4-btn-military flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-bold transition shadow hover:brightness-110 cursor-pointer"
+              title="制定新的战略国策节点"
+            >
+              <Plus className="w-3.5 h-3.5 text-white" />
+              <span>+ 新建国策</span>
+            </button>
+            <button
+              onClick={() => {
+                soundFx.playClick();
+                setParentFocusForCreation(null);
+                setNewIcon('encounter');
+                setShowCreateModal(true);
+              }}
+              className="flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-bold transition shadow bg-gradient-to-r from-orange-800 to-amber-800 hover:from-orange-700 hover:to-amber-700 text-orange-100 border border-orange-500/70 cursor-pointer"
+              title="录入突发考验或意外事件，作为遭遇型国策应急攻坚"
+            >
+              <Zap className="w-3 h-3 text-orange-300 animate-pulse" />
+              <span>⚡ 突发遭遇</span>
+            </button>
           </div>
         </div>
       </div>
@@ -806,11 +1025,30 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
         {/* Floating Canvas Top Action Bar (HOI4 沉浸式战区控制台) */}
         <div className="absolute top-4 left-4 z-20 flex items-center space-x-2.5 hoi4-window px-4 py-2 rounded shadow-[0_8px_30px_rgba(0,0,0,0.9)]">
           <button
-            onClick={() => setShowCreateModal(true)}
-            className="hoi4-btn-military flex items-center space-x-1.5 px-3 py-1.5 rounded-sm text-xs font-bold transition shadow-md"
+            onClick={() => {
+              soundFx.playClick();
+              setParentFocusForCreation(null);
+              setNewIcon('');
+              setShowCreateModal(true);
+            }}
+            className="hoi4-btn-military flex items-center space-x-1.5 px-3.5 py-1.5 rounded-sm text-xs font-bold transition shadow-md hover:brightness-110 border border-[#d4af37]/60 cursor-pointer"
           >
             <Plus className="w-4 h-4 text-white" />
-            <span>制定新国策</span>
+            <span>新建国策</span>
+          </button>
+
+          <button
+            onClick={() => {
+              soundFx.playClick();
+              setParentFocusForCreation(null);
+              setNewIcon('encounter');
+              setShowCreateModal(true);
+            }}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-sm text-xs font-bold transition shadow-md bg-gradient-to-r from-orange-800/90 to-amber-800/90 hover:from-orange-700 hover:to-amber-700 text-orange-100 border border-orange-500/70 shadow-[0_0_12px_rgba(249,115,22,0.3)] cursor-pointer"
+            title="录入突发考验或意外事件，作为遭遇型国策应急攻坚"
+          >
+            <Zap className="w-3.5 h-3.5 text-orange-300 animate-pulse" />
+            <span>⚡ 录入突发遭遇</span>
           </button>
 
           <button
@@ -877,9 +1115,17 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
             {/* 顶部标题栏：居中大写标题 + 金属铆钉 + 右上角铜质十字叉关闭按钮 (素材图 3 顶部) */}
             <div className="hoi4-header-bar px-4 py-2.5 flex items-center justify-between relative select-none">
               <div className="flex items-center space-x-2">
-                <span className="w-2 h-2 rounded-full bg-[#caa858] border border-[#1a1d22] shadow-inner" />
-                <span className="font-sans font-bold text-[10.5px] uppercase tracking-wider text-[#94a3b8]">
-                  NATIONAL FOCUS
+                <span
+                  className={`w-2 h-2 rounded-full border border-[#1a1d22] shadow-inner ${
+                    selectedFocus.icon === 'encounter' ? 'bg-orange-500 animate-pulse' : 'bg-[#caa858]'
+                  }`}
+                />
+                <span
+                  className={`font-sans font-bold text-[10.5px] uppercase tracking-wider ${
+                    selectedFocus.icon === 'encounter' ? 'text-orange-400' : 'text-[#94a3b8]'
+                  }`}
+                >
+                  {selectedFocus.icon === 'encounter' ? '⚡ 突发遭遇 · ENCOUNTER' : 'NATIONAL FOCUS'}
                 </span>
               </div>
 
@@ -902,9 +1148,26 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
               {/* 顶部操作行：胶囊天数框 + 军绿战备推进大按钮 (素材图 3 顶部：35 days + Start) */}
               <div className="flex items-center justify-between pb-1">
                 {/* 35 days 胶囊框 */}
-                <div className="hoi4-pill-badge px-6 py-1 text-xs font-mono font-bold tracking-wider flex items-center space-x-2">
+                <div
+                  className={`hoi4-pill-badge px-6 py-1 text-xs font-mono font-bold tracking-wider flex items-center space-x-2 ${
+                    selectedFocus.icon === 'encounter'
+                      ? '!border-orange-500/80 !text-orange-200 bg-orange-950/40 shadow-[0_0_10px_rgba(249,115,22,0.3)]'
+                      : ''
+                  }`}
+                >
+                  {selectedFocus.icon === 'encounter' && (
+                    <Zap className="w-3.5 h-3.5 text-orange-400 animate-pulse" />
+                  )}
                   <span>
-                    {selectedFocus.status === 'completed'
+                    {selectedFocus.icon === 'encounter'
+                      ? selectedFocus.status === 'completed'
+                        ? '★ 遭遇已化解 (RESOLVED)'
+                        : selectedFocus.status === 'active'
+                        ? '⚡ 突发遭遇 · 应急推进'
+                        : selectedFocus.status === 'paused'
+                        ? '⏳ 暂缓处置 (STANDBY)'
+                        : '✕ 遭遇中止 (ABANDONED)'
+                      : selectedFocus.status === 'completed'
                       ? '战略达成 (ACHIEVED)'
                       : selectedFocus.status === 'active'
                       ? '35 天 · 进行中 (35 DAYS)'
@@ -916,6 +1179,29 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
 
                 {/* 军工橄榄绿主动作按钮 (Start / Complete / Standby) */}
                 <div className="flex items-center space-x-2">
+                  {/* 类型切换按钮 (常规战略 vs 突发遭遇) */}
+                  <button
+                    type="button"
+                    onClick={toggleEncounterType}
+                    className={`px-3 py-1.5 rounded-sm text-xs font-mono font-bold border transition flex items-center space-x-1.5 ${
+                      selectedFocus.icon === 'encounter'
+                        ? 'bg-orange-950/80 border-orange-500 text-orange-200 hover:bg-orange-900 shadow-[0_0_8px_rgba(249,115,22,0.3)]'
+                        : 'bg-[#1a1e23] border-[#3d4652] text-[#94a3b8] hover:text-[#f8fafc] hover:border-[#64748b]'
+                    }`}
+                    title={
+                      selectedFocus.icon === 'encounter'
+                        ? '点击转为常规战略国策'
+                        : '点击转为突发遭遇国策'
+                    }
+                  >
+                    <Zap
+                      className={`w-3.5 h-3.5 ${
+                        selectedFocus.icon === 'encounter' ? 'text-orange-400' : 'text-[#94a3b8]'
+                      }`}
+                    />
+                    <span>{selectedFocus.icon === 'encounter' ? '突发遭遇' : '转为遭遇'}</span>
+                  </button>
+
                   {selectedFocus.status !== 'completed' ? (
                     <button
                       onClick={() => handleStatusChange('completed')}
@@ -972,17 +1258,32 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
                     <svg viewBox="0 0 100 100" className="w-24 h-24 drop-shadow-[0_4px_10px_rgba(0,0,0,0.9)]">
                       <path
                         d="M 50 90 C 25 86 10 65 14 42 C 16 30 26 18 38 12 C 34 20 33 30 38 38 C 30 34 22 44 26 54 C 22 58 24 70 34 76 C 38 78 44 84 50 90 Z"
-                        fill="url(#goldGradModal)"
-                        stroke="#261b05"
+                        fill={
+                          selectedFocus.icon === 'encounter'
+                            ? 'url(#orangeGradModal)'
+                            : 'url(#goldGradModal)'
+                        }
+                        stroke={selectedFocus.icon === 'encounter' ? '#431407' : '#261b05'}
                         strokeWidth="1"
                       />
                       <path
                         d="M 50 90 C 75 86 90 65 86 42 C 84 30 74 18 62 12 C 66 20 67 30 62 38 C 70 34 78 44 74 54 C 78 58 76 70 66 76 C 62 78 56 84 50 90 Z"
-                        fill="url(#goldGradModal)"
-                        stroke="#261b05"
+                        fill={
+                          selectedFocus.icon === 'encounter'
+                            ? 'url(#orangeGradModal)'
+                            : 'url(#goldGradModal)'
+                        }
+                        stroke={selectedFocus.icon === 'encounter' ? '#431407' : '#261b05'}
                         strokeWidth="1"
                       />
-                      <circle cx="50" cy="88" r="4.5" fill="#f59e0b" stroke="#3b2605" strokeWidth="1" />
+                      <circle
+                        cx="50"
+                        cy="88"
+                        r="4.5"
+                        fill={selectedFocus.icon === 'encounter' ? '#ea580c' : '#f59e0b'}
+                        stroke={selectedFocus.icon === 'encounter' ? '#431407' : '#3b2605'}
+                        strokeWidth="1"
+                      />
                       <defs>
                         <linearGradient id="goldGradModal" x1="0%" y1="0%" x2="100%" y2="100%">
                           <stop offset="0%" stopColor="#fff8db" />
@@ -990,10 +1291,26 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
                           <stop offset="70%" stopColor="#b8861b" />
                           <stop offset="100%" stopColor="#634509" />
                         </linearGradient>
+                        <linearGradient id="orangeGradModal" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#ffedd5" />
+                          <stop offset="35%" stopColor="#fb923c" />
+                          <stop offset="70%" stopColor="#c2410c" />
+                          <stop offset="100%" stopColor="#7c2d12" />
+                        </linearGradient>
                       </defs>
                     </svg>
-                    <div className="absolute w-14 h-14 rounded-full bg-gradient-to-br from-[#261f10] via-[#161208] to-[#0a0804] border-2 border-[#d4af37] shadow-[inset_0_3px_6px_rgba(0,0,0,0.9),0_2px_4px_rgba(0,0,0,0.8)] flex items-center justify-center">
-                      <Coins className="w-7 h-7 text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" />
+                    <div
+                      className={`absolute w-14 h-14 rounded-full bg-gradient-to-br shadow-[inset_0_3px_6px_rgba(0,0,0,0.9),0_2px_4px_rgba(0,0,0,0.8)] flex items-center justify-center ${
+                        selectedFocus.icon === 'encounter'
+                          ? 'from-[#3a1a08] via-[#210f04] to-[#0a0502] border-2 border-orange-500'
+                          : 'from-[#261f10] via-[#161208] to-[#0a0804] border-2 border-[#d4af37]'
+                      }`}
+                    >
+                      {selectedFocus.icon === 'encounter' ? (
+                        <Zap className="w-7 h-7 text-orange-400 drop-shadow-[0_2px_6px_rgba(249,115,22,0.9)] animate-pulse" />
+                      ) : (
+                        <Coins className="w-7 h-7 text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" />
+                      )}
                     </div>
                   </div>
                   <span className="text-[10px] font-mono uppercase tracking-wider text-[#94a3b8] mt-1.5">
@@ -1124,12 +1441,155 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
                 )}
               </div>
 
+              {/* 挂载随笔管理面板 (HOI4 Attached Essays / Operational Memoirs) */}
+              <div className="hoi4-inset-panel p-3 rounded-sm space-y-2.5">
+                <div className="flex items-center justify-between pb-1 border-b border-[#252c36]">
+                  <div className="flex items-center space-x-2">
+                    <BookOpen className="w-3.5 h-3.5 text-[#fbbf24]" />
+                    <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-[#ffffff]">
+                      挂载战地随笔 · 心得与推演记录 ({focusEssays.length})
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {/* 挂载已有随笔按钮 */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowAttachDropdown(!showAttachDropdown)}
+                        className="text-[11px] font-mono text-[#cbd5e1] hover:text-[#fbbf24] flex items-center space-x-1 px-2 py-1 rounded bg-[#13171c] border border-[#323c4a] hover:border-[#fbbf24] transition cursor-pointer"
+                        title="从当前空间中选择已有随笔挂载至此国策"
+                      >
+                        <Link className="w-3 h-3 text-[#d4af37]" />
+                        <span>挂载已有</span>
+                      </button>
+
+                      {showAttachDropdown && (
+                        <div className="absolute right-0 bottom-full mb-1.5 w-64 p-2.5 rounded hoi4-window z-50 shadow-2xl border-2 border-[#434e5c] max-h-52 overflow-y-auto">
+                          <div className="text-[10px] font-mono text-[#94a3b8] pb-1 border-b border-[#2b3440] mb-1.5 flex justify-between items-center">
+                            <span>选择空间内随笔挂载:</span>
+                            <button
+                              type="button"
+                              onClick={() => setShowAttachDropdown(false)}
+                              className="text-rose-400 hover:text-white px-1 text-xs"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          {availableToAttach.length === 0 ? (
+                            <div className="text-[11px] text-[#64748b] py-3 text-center font-serif">
+                              暂无其他未挂载的随笔
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              {availableToAttach.map((e) => (
+                                <button
+                                  key={e.id}
+                                  type="button"
+                                  onClick={() => handleAttachExistingEssay(e.id)}
+                                  className="w-full text-left p-1.5 rounded hover:bg-[#202731] transition text-xs text-[#e2e8f0] truncate flex items-center justify-between group border border-transparent hover:border-[#3d4857]"
+                                >
+                                  <span className="truncate flex-1 text-[#ffffff] group-hover:text-[#fbbf24] font-serif">
+                                    {e.title}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-emerald-400 ml-1.5 shrink-0 font-bold">
+                                    +挂载
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 撰写新随笔并挂载 */}
+                    <button
+                      type="button"
+                      onClick={handleOpenCreateEssayForFocus}
+                      className="text-[11px] font-mono text-emerald-300 hover:text-emerald-200 flex items-center space-x-1 px-2.5 py-1 rounded bg-emerald-950/80 border border-emerald-700 hover:border-emerald-500 transition cursor-pointer font-bold"
+                      title="直接新建一篇随笔并自动挂载至此国策"
+                    >
+                      <Plus className="w-3 h-3 text-emerald-400" />
+                      <span>新建并挂载</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 挂载随笔列表 */}
+                {focusEssays.length === 0 ? (
+                  <div className="text-xs text-[#64748b] py-2 text-center font-serif">
+                    尚未挂载随笔。可将战役推进心得、战略推演或复盘备忘挂载于此。
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {focusEssays.map((essay) => (
+                      <div
+                        key={essay.id}
+                        className="flex items-center justify-between p-2 rounded bg-[#101317] border border-[#262f3a] hover:border-[#4b596c] transition group"
+                      >
+                        <div
+                          onClick={() => handleReadOrEditEssay(essay)}
+                          className="flex-1 min-w-0 cursor-pointer pr-2"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs font-serif font-bold text-[#ffffff] group-hover:text-[#fbbf24] truncate transition">
+                              {essay.title}
+                            </span>
+                            <span className="text-[9px] font-mono text-[#64748b] shrink-0">
+                              {essay.created_at?.slice(0, 10)}
+                            </span>
+                          </div>
+                          {essay.body_md && (
+                            <p className="text-[11px] text-[#94a3b8] truncate font-serif mt-0.5">
+                              {essay.body_md.slice(0, 80)}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center space-x-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleReadOrEditEssay(essay)}
+                            className="p-1 text-[#94a3b8] hover:text-[#fbbf24] rounded hover:bg-[#1f2631] transition"
+                            title="阅读与编辑随笔"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDetachEssay(essay.id, essay.title)}
+                            className="p-1 text-[#64748b] hover:text-rose-400 rounded hover:bg-[#281818] transition"
+                            title="解除挂载（不删除随笔本体）"
+                          >
+                            <Unlink className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* 底部辅助操作区 */}
               <div className="flex items-center justify-between pt-1 text-xs">
                 <div className="flex items-center space-x-2">
                   <button
+                    onClick={() => {
+                      soundFx.playClick();
+                      setParentFocusForCreation(selectedFocus);
+                      setNewIcon('');
+                      setShowCreateModal(true);
+                      setSelectedFocus(null);
+                    }}
+                    className="hoi4-btn-military px-3 py-1.5 rounded-sm flex items-center space-x-1 text-white font-bold cursor-pointer"
+                    title="在当前国策之后创建新的后续国策分支"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-white" />
+                    <span>在此节点后新建国策</span>
+                  </button>
+                  <button
                     onClick={handleOpenAiNextNode}
-                    className="hoi4-btn-steel px-3 py-1.5 rounded-sm flex items-center space-x-1 text-amber-300"
+                    className="hoi4-btn-steel px-3 py-1.5 rounded-sm flex items-center space-x-1 text-amber-300 cursor-pointer"
                     title="根据当前战局定制推演后续分支"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-400" />
@@ -1140,7 +1600,7 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
                       setSubFocusModalTarget(selectedFocus);
                       setIsSubFocusModalOpen(true);
                     }}
-                    className="hoi4-btn-steel px-3 py-1.5 rounded-sm flex items-center space-x-1 text-[#cbd5e1]"
+                    className="hoi4-btn-steel px-3 py-1.5 rounded-sm flex items-center space-x-1 text-[#cbd5e1] cursor-pointer"
                   >
                     <ListTodo className="w-3.5 h-3.5 text-[#94a3b8]" />
                     <span>管理战役拆解清单</span>
@@ -1168,11 +1628,67 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
             <div className="absolute top-2 right-2 screw-rivet" />
 
             <h3 className="text-base font-serif font-black text-[#ffffff] mb-4 flex items-center space-x-2 drop-shadow">
-              <Plus className="w-4 h-4 text-[#d4af37]" />
-              <span>制定战略国策 (NEW DIRECTIVE)</span>
+              {newIcon === 'encounter' ? (
+                <>
+                  <Zap className="w-4 h-4 text-orange-400 animate-pulse" />
+                  <span>录入突发遭遇 (EMERGENCY ENCOUNTER)</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 text-[#d4af37]" />
+                  <span>制定战略国策 (NEW DIRECTIVE)</span>
+                </>
+              )}
             </h3>
 
+            {parentFocusForCreation && (
+              <div className="mb-3 px-3 py-2 bg-[#17202a] border border-sky-600/50 rounded flex items-center justify-between text-xs">
+                <div className="flex items-center space-x-2 text-sky-200">
+                  <span className="text-slate-400 font-mono">前置依托国策:</span>
+                  <span className="font-bold text-amber-300 font-serif">【{parentFocusForCreation.title}】</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setParentFocusForCreation(null)}
+                  className="text-[11px] text-slate-400 hover:text-slate-200 underline cursor-pointer"
+                >
+                  取消关联 (改为独立国策)
+                </button>
+              </div>
+            )}
+
             <form onSubmit={handleCreateSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-[11px] font-mono font-bold text-[#94a3b8] mb-1">
+                  国策类型与定位
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewIcon('')}
+                    className={`py-1.5 text-xs font-mono font-bold rounded-sm border transition flex items-center justify-center space-x-1.5 ${
+                      newIcon !== 'encounter'
+                        ? 'bg-amber-950/70 text-amber-300 border-[#d4af37] shadow'
+                        : 'bg-[#1a1e23] border-[#373e47] text-[#94a3b8]'
+                    }`}
+                  >
+                    <span>🎖️ 常规战略规划</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewIcon('encounter')}
+                    className={`py-1.5 text-xs font-mono font-bold rounded-sm border transition flex items-center justify-center space-x-1.5 ${
+                      newIcon === 'encounter'
+                        ? 'bg-orange-950/80 text-orange-300 border-orange-500 shadow'
+                        : 'bg-[#1a1e23] border-[#373e47] text-[#94a3b8]'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5 text-orange-400" />
+                    <span>⚡ 突发遭遇考验</span>
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[11px] font-mono font-bold text-[#94a3b8] mb-1">
                   国策番号与名称 *
@@ -1180,7 +1696,11 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
                 <input
                   type="text"
                   required
-                  placeholder="例如：优先经济建设、攻克核心系统架构师..."
+                  placeholder={
+                    newIcon === 'encounter'
+                      ? '例如：突发考研改革、项目突击攻关、临时资金缺口...'
+                      : '例如：优先经济建设、攻克核心系统架构师...'
+                  }
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   className="w-full bg-[#0d1013] border border-[#373e47] rounded px-3 py-1.5 text-xs text-[#ffffff] placeholder-[#64748b] focus:outline-none focus:border-[#d4af37]"
@@ -1193,7 +1713,11 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="详细描述该国策的核心战略意图与推进步骤..."
+                  placeholder={
+                    newIcon === 'encounter'
+                      ? '详细记录此次突发遭遇的起因、紧迫性与应急化解措施...'
+                      : '详细描述该国策的核心战略意图与推进步骤...'
+                  }
                   value={newBodyMd}
                   onChange={(e) => setNewBodyMd(e.target.value)}
                   className="w-full bg-[#0d1013] border border-[#373e47] rounded px-3 py-1.5 text-xs text-[#ffffff] placeholder-[#64748b] focus:outline-none focus:border-[#d4af37]"
@@ -1233,16 +1757,23 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
               <div className="flex justify-end space-x-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="hoi4-btn-steel px-4 py-1.5 text-xs font-mono rounded-sm"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setParentFocusForCreation(null);
+                  }}
+                  className="hoi4-btn-steel px-4 py-1.5 text-xs font-mono rounded-sm cursor-pointer"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
-                  className="hoi4-btn-military px-5 py-1.5 text-xs font-serif font-bold rounded-sm text-white shadow-md"
+                  className={`px-5 py-1.5 text-xs font-serif font-bold rounded-sm text-white shadow-md transition ${
+                    newIcon === 'encounter'
+                      ? 'bg-gradient-to-r from-orange-700 to-amber-700 hover:from-orange-600 hover:to-amber-600 border border-orange-500'
+                      : 'hoi4-btn-military'
+                  }`}
                 >
-                  签署立项
+                  {newIcon === 'encounter' ? '发布应急遭遇' : '签署立项'}
                 </button>
               </div>
             </form>
@@ -1442,6 +1973,21 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
             syncNodesFromFoci(updatedFoci);
           }
         }}
+      />
+
+      {/* 国策挂载随笔：随笔撰写、阅读与编辑弹窗 */}
+      <EssayModal
+        isOpen={showEssayModal}
+        onClose={() => {
+          setShowEssayModal(false);
+          setEditingEssay(null);
+          setIsNewEssayForFocus(false);
+        }}
+        lifeId={lifeId}
+        initialEssay={editingEssay}
+        onSaved={handleEssaySaved}
+        onDeleted={handleEssayDeleted}
+        context={strategyContext}
       />
     </div>
   );

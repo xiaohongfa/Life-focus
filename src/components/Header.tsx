@@ -17,8 +17,15 @@ import {
   VolumeX,
   Sliders,
   ChevronDown,
+  Clock,
+  Calendar,
 } from 'lucide-react';
 import { soundFx } from '../utils/soundEffects';
+import {
+  getStoredBirthDate,
+  setStoredBirthDate,
+  calculateSurvivalTime,
+} from '../utils/survivalTime';
 
 interface HeaderProps {
   lives: Life[];
@@ -52,6 +59,35 @@ export const Header: React.FC<HeaderProps> = ({
   const [volume, setVolume] = useState(() => Math.round(soundFx.getVolume() * 100));
   const [showVolumePopup, setShowVolumePopup] = useState(false);
   const volumePopupRef = useRef<HTMLDivElement>(null);
+
+  // 冒险时长与出生时刻 (Survival Duration)
+  const [birthDate, setBirthDate] = useState(() => getStoredBirthDate(currentLife?.id));
+  const [survival, setSurvival] = useState(() => calculateSurvivalTime(getStoredBirthDate(currentLife?.id)));
+  const [showBirthModal, setShowBirthModal] = useState(false);
+  const [tempBirthDate, setTempBirthDate] = useState('');
+
+  // 监听生命周期与时间流逝 (每秒更新冒险时长)
+  useEffect(() => {
+    const b = getStoredBirthDate(currentLife?.id);
+    setBirthDate(b);
+    setSurvival(calculateSurvivalTime(b));
+  }, [currentLife?.id]);
+
+  useEffect(() => {
+    const update = () => setSurvival(calculateSurvivalTime(birthDate));
+    update();
+    const interval = setInterval(update, 1000);
+    const handleChanged = () => {
+      const updated = getStoredBirthDate(currentLife?.id);
+      setBirthDate(updated);
+      setSurvival(calculateSurvivalTime(updated));
+    };
+    window.addEventListener('birthdate-changed', handleChanged);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('birthdate-changed', handleChanged);
+    };
+  }, [birthDate, currentLife?.id]);
 
   // Close volume popover when clicking outside
   useEffect(() => {
@@ -153,8 +189,32 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
 
-        {/* ===================== 右侧：机械音效调控、档案切换与战略控制台 ===================== */}
+        {/* ===================== 右侧：冒险时长、音效调控、档案切换与战略控制台 ===================== */}
         <div className="flex items-center space-x-3 pr-4">
+          {/* 冒险时长与出生时刻 (HOI4 Survival Duration Clock) */}
+          <button
+            type="button"
+            onClick={() => {
+              soundFx.playClick();
+              setTempBirthDate(birthDate || '2000-01-01T00:00');
+              setShowBirthModal(true);
+            }}
+            onMouseEnter={() => soundFx.playHover()}
+            className="hoi4-pill-badge px-3 py-1.5 flex items-center space-x-2 transition group hover:border-[#fbbf24] cursor-pointer shadow-sm"
+            title="点击设定最高统帅出生日期与降生时间（实时推算年月日时分）"
+          >
+            <Clock className="w-3.5 h-3.5 text-[#fbbf24] group-hover:rotate-45 transition-transform shrink-0" />
+            <div className="flex items-center space-x-1.5">
+              <span className="text-[10px] font-mono text-[#94a3b8] uppercase tracking-wider font-semibold">
+                冒险时长:
+              </span>
+              <span className="text-xs font-mono font-black text-[#ffffff] group-hover:text-[#fbbf24] tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                {survival.formatted}
+              </span>
+            </div>
+            <Calendar className="w-3 h-3 text-[#64748b] group-hover:text-[#fbbf24] transition-colors ml-0.5 shrink-0" />
+          </button>
+
           {/* 战役机械音效与音量调控 (Tactile Audio & Loud Volume Master Control) */}
           <div className="relative" ref={volumePopupRef}>
             <div className="flex items-center bg-[#13171c] p-0.5 rounded border border-[#323b47] shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]">
@@ -331,6 +391,7 @@ export const Header: React.FC<HeaderProps> = ({
                 soundFx.playClick();
                 onSelectTab(item.id);
               }}
+              onMouseEnter={() => soundFx.playHover()}
               className={`flex flex-col items-center px-4 py-1.5 rounded transition whitespace-nowrap cursor-pointer ${
                 isActive
                   ? 'hoi4-btn-steel-active scale-[1.02] border-b-2 border-b-[#d4af37]'
@@ -405,6 +466,75 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 设定出生时刻弹窗 (HOI4 Commander Birth Date Modal) */}
+      {showBirthModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+          <div className="hoi4-window p-6 rounded-lg shadow-2xl w-full max-w-md relative border-2 border-[#4a5768] text-white">
+            <div className="absolute top-2 right-2 screw-rivet" />
+            <div className="absolute top-2 left-2 screw-rivet" />
+            <div className="absolute bottom-2 right-2 screw-rivet" />
+            <div className="absolute bottom-2 left-2 screw-rivet" />
+
+            <div className="inline-block bg-amber-950/80 border border-amber-600 text-amber-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase tracking-wider mb-2">
+              COMMANDER DOSSIER · 出生档案
+            </div>
+
+            <h3 className="text-lg font-serif font-black text-[#ffffff] mb-1 flex items-center space-x-2">
+              <Clock className="w-5 h-5 text-[#fbbf24]" />
+              <span>设定最高统帅降生时刻 (BIRTH DATE)</span>
+            </h3>
+            <p className="text-xs text-[#cbd5e1] mb-4 font-serif leading-relaxed">
+              系统将根据您的出生日期与当前现实世界时间，实时推演您在整个人生宏大战略战役中的已存活冒险历程（年月日时分）。
+            </p>
+
+            <div className="space-y-3 mb-5">
+              <div>
+                <label className="block text-xs font-mono text-[#94a3b8] mb-1.5">
+                  出生公历日期与时间 (精确到分钟):
+                </label>
+                <input
+                  type="datetime-local"
+                  value={tempBirthDate}
+                  onChange={(e) => setTempBirthDate(e.target.value)}
+                  className="w-full hoi4-inset-panel px-3 py-2 text-sm text-[#ffffff] font-mono font-bold rounded focus:outline-none focus:border-[#fbbf24]"
+                />
+              </div>
+
+              {tempBirthDate && (
+                <div className="hoi4-inset-panel p-2.5 rounded text-xs font-mono flex items-center justify-between text-[#e2e8f0]">
+                  <span className="text-[#94a3b8]">即时推算时长:</span>
+                  <span className="text-[#fbbf24] font-black">
+                    {calculateSurvivalTime(tempBirthDate).formatted}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowBirthModal(false)}
+                className="hoi4-btn-steel px-4 py-1.5 text-xs font-mono rounded text-[#e2e8f0]"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  soundFx.playStamp();
+                  setStoredBirthDate(tempBirthDate, currentLife?.id);
+                  setBirthDate(tempBirthDate);
+                  setShowBirthModal(false);
+                }}
+                className="hoi4-btn-military px-5 py-1.5 text-xs font-serif font-bold rounded"
+              >
+                确认并载入史册
+              </button>
+            </div>
           </div>
         </div>
       )}

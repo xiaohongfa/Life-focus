@@ -13,13 +13,11 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default()
+                    .level(log::LevelFilter::Info)
+                    .build(),
+            )?;
 
             // 真正的绿色便携存储模式支持 (§P1-PKG-04 & 用户指令 4)
             // 优先级：
@@ -127,6 +125,10 @@ pub fn run() {
             commands::create_sub_focus,
             commands::update_sub_focus_status,
             commands::delete_sub_focus,
+            commands::get_focus_essays,
+            commands::attach_essay_to_focus,
+            commands::detach_essay_from_focus,
+            commands::get_all_focus_essay_counts,
             commands::get_staff_members,
             commands::create_staff_member,
             commands::update_staff_member,

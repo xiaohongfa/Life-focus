@@ -158,6 +158,17 @@ export interface Essay {
   updated_at: string;
 }
 
+export interface ObjectLink {
+  id: string;
+  life_id: string;
+  source_type: string;
+  source_id: string;
+  target_type: string;
+  target_id: string;
+  kind: string;
+  created_at: string;
+}
+
 export interface ArchiveItem {
   id: string;
   item_type: string;

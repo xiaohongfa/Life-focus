@@ -146,4 +146,95 @@ describe('Browser Mock Contract & Operations', () => {
     expect(duplicate.id).toBe(first.id);
     expect(first.source_focus_id < first.target_focus_id).toBe(true);
   });
+
+  it('supports focus essay mounting, query and detachment', () => {
+    const life = mockHandler<Life>('create_life', { name: '随笔挂载测试人生' });
+    const focus = mockHandler<{ id: string }>('create_focus', {
+      lifeId: life.id,
+      title: '主线战略攻坚',
+      status: 'active',
+      positionX: 0,
+      positionY: 0,
+    });
+    const essay = mockHandler<{ id: string; title: string }>('create_essay', {
+      lifeId: life.id,
+      title: '战役心得随笔',
+      bodyMd: '深入分析当前局势...',
+    });
+
+    // 1. Initial mounted essays empty
+    const initialMounted = mockHandler<any[]>('get_focus_essays', {
+      lifeId: life.id,
+      focusId: focus.id,
+    });
+    expect(initialMounted.length).toBe(0);
+
+    // 2. Attach essay to focus
+    const link = mockHandler<any>('attach_essay_to_focus', {
+      lifeId: life.id,
+      focusId: focus.id,
+      essayId: essay.id,
+    });
+    expect(link.source_id).toBe(focus.id);
+    expect(link.target_id).toBe(essay.id);
+
+    // 3. Query mounted essays
+    const mounted = mockHandler<any[]>('get_focus_essays', {
+      lifeId: life.id,
+      focusId: focus.id,
+    });
+    expect(mounted.length).toBe(1);
+    expect(mounted[0].id).toBe(essay.id);
+
+    // 4. Query essay counts
+    const counts = mockHandler<Record<string, number>>('get_all_focus_essay_counts', {
+      lifeId: life.id,
+    });
+    expect(counts[focus.id]).toBe(1);
+
+    // 5. Detach essay
+    mockHandler('detach_essay_from_focus', {
+      lifeId: life.id,
+      focusId: focus.id,
+      essayId: essay.id,
+    });
+    const afterDetach = mockHandler<any[]>('get_focus_essays', {
+      lifeId: life.id,
+      focusId: focus.id,
+    });
+    expect(afterDetach.length).toBe(0);
+  });
 });
+
+import { calculateSurvivalTime } from '../utils/survivalTime';
+
+describe('Survival Time (冒险时长) calculation', () => {
+  it('handles empty or unset birth date', () => {
+    const res = calculateSurvivalTime('');
+    expect(res.isSet).toBe(false);
+    expect(res.formatted).toBe('点击设定降生时间');
+  });
+
+  it('accurately calculates elapsed years, months, days, hours, minutes', () => {
+    const birth = '2000-01-01T08:00';
+    const fakeNow = new Date(2026, 8, 18, 12, 45, 0); // 2026-09-18 12:45
+    const res = calculateSurvivalTime(birth, fakeNow);
+
+    expect(res.isSet).toBe(true);
+    expect(res.years).toBe(26);
+    expect(res.months).toBe(8);
+    expect(res.days).toBe(17);
+    expect(res.hours).toBe(4);
+    expect(res.minutes).toBe(45);
+    expect(res.formatted).toBe('26年 8月 17天 4时 45分');
+  });
+
+  it('handles future birth date gracefully', () => {
+    const fakeNow = new Date(2026, 8, 18, 12, 0, 0);
+    const future = new Date(2026, 8, 20, 12, 0, 0).toISOString();
+    const res = calculateSurvivalTime(future, fakeNow);
+    expect(res.isSet).toBe(true);
+    expect(res.formatted).toBe('未来降生时刻');
+  });
+});
+

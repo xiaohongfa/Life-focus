@@ -1,6 +1,6 @@
 import React from 'react';
 import type { WorldOverview, Focus, Essay } from '../../api/types';
-import { Shield, Compass, BookOpen, Flag, AlertCircle, ChevronRight, PenLine, Gauge, Award } from 'lucide-react';
+import { Shield, Compass, BookOpen, Flag, AlertCircle, ChevronRight, PenLine, Gauge, Award, Plus } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { soundFx } from '../../utils/soundEffects';
@@ -272,16 +272,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 {active_foci.length} 战役推进中
               </span>
             </div>
-            <button
-              onClick={() => {
-                soundFx.playClick();
-                onNavigateTab('focus');
-              }}
-              className="text-xs font-serif font-bold text-[#fbbf24] hover:text-amber-300 flex items-center space-x-1"
-            >
-              <span>进入战略推演沙盘</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  soundFx.playClick();
+                  onNavigateTab('focus');
+                }}
+                className="hoi4-btn-military flex items-center space-x-1 px-2.5 py-1 rounded text-xs font-bold transition shadow hover:brightness-110 cursor-pointer"
+                title="前往战略沙盘制定新国策"
+              >
+                <Plus className="w-3.5 h-3.5 text-white" />
+                <span>+ 新建国策</span>
+              </button>
+              <button
+                onClick={() => {
+                  soundFx.playClick();
+                  onNavigateTab('focus');
+                }}
+                className="text-xs font-serif font-bold text-[#fbbf24] hover:text-amber-300 flex items-center space-x-1 cursor-pointer"
+              >
+                <span>进入战略推演沙盘</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

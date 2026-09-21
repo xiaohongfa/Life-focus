@@ -209,3 +209,45 @@ pub fn delete_sub_focus(
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::delete_sub_focus(&conn, &life_id, &sub_id).map_err(map_err)
 }
+
+#[tauri::command]
+pub fn get_focus_essays(
+    state: State<'_, DbState>,
+    life_id: String,
+    focus_id: String,
+) -> Result<Vec<crate::models::Essay>, String> {
+    let conn = state.conn.lock().map_err(map_err)?;
+    Repository::get_focus_essays(&conn, &life_id, &focus_id).map_err(map_err)
+}
+
+#[tauri::command]
+pub fn attach_essay_to_focus(
+    state: State<'_, DbState>,
+    life_id: String,
+    focus_id: String,
+    essay_id: String,
+) -> Result<crate::models::ObjectLink, String> {
+    let conn = state.conn.lock().map_err(map_err)?;
+    Repository::attach_essay_to_focus(&conn, &life_id, &focus_id, &essay_id).map_err(map_err)
+}
+
+#[tauri::command]
+pub fn detach_essay_from_focus(
+    state: State<'_, DbState>,
+    life_id: String,
+    focus_id: String,
+    essay_id: String,
+) -> Result<(), String> {
+    let conn = state.conn.lock().map_err(map_err)?;
+    Repository::detach_essay_from_focus(&conn, &life_id, &focus_id, &essay_id).map_err(map_err)
+}
+
+#[tauri::command]
+pub fn get_all_focus_essay_counts(
+    state: State<'_, DbState>,
+    life_id: String,
+) -> Result<std::collections::HashMap<String, i64>, String> {
+    let conn = state.conn.lock().map_err(map_err)?;
+    Repository::get_all_focus_essay_counts(&conn, &life_id).map_err(map_err)
+}
+

@@ -502,4 +502,215 @@ impl Repository {
         }
         Ok(())
     }
+
+    // ==========================================
+    // Focus Mounted Essays (随笔挂载)
+    // ==========================================
+
+    pub fn get_focus_essays(
+        conn: &Connection,
+        life_id: &str,
+        focus_id: &str,
+    ) -> Result<Vec<crate::models::Essay>> {
+        let mut stmt = conn.prepare(
+            "SELECT e.id, e.life_id, e.title, e.body_md, e.created_at, e.updated_at
+             FROM essay e
+             JOIN object_link ol ON ol.target_id = e.id AND ol.target_type = 'essay'
+             WHERE ol.life_id = ?1 AND ol.source_type = 'focus' AND ol.source_id = ?2
+             ORDER BY e.created_at DESC",
+        )?;
+        let rows = stmt.query_map(params![life_id, focus_id], |row| {
+            Ok(crate::models::Essay {
+                id: row.get(0)?,
+                life_id: row.get(1)?,
+                title: row.get(2)?,
+                body_md: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn attach_essay_to_focus(
+        conn: &Connection,
+        life_id: &str,
+        focus_id: &str,
+        essay_id: &str,
+    ) -> Result<crate::models::ObjectLink> {
+        // 校验国策是否存在
+        let focus_exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM focus WHERE id = ?1 AND life_id = ?2)",
+            params![focus_id, life_id],
+            |row| row.get(0),
+        )?;
+        if !focus_exists {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+
+        // 校验随笔是否存在
+        let essay_exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM essay WHERE id = ?1 AND life_id = ?2)",
+            params![essay_id, life_id],
+            |row| row.get(0),
+        )?;
+        if !essay_exists {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+
+        // 检查是否已挂载
+        let existing = conn.query_row(
+            "SELECT id, life_id, source_type, source_id, target_type, target_id, kind, created_at
+             FROM object_link
+             WHERE life_id = ?1 AND source_type = 'focus' AND source_id = ?2 AND target_type = 'essay' AND target_id = ?3",
+            params![life_id, focus_id, essay_id],
+            |row| {
+                Ok(crate::models::ObjectLink {
+                    id: row.get(0)?,
+                    life_id: row.get(1)?,
+                    source_type: row.get(2)?,
+                    source_id: row.get(3)?,
+                    target_type: row.get(4)?,
+                    target_id: row.get(5)?,
+                    kind: row.get(6)?,
+                    created_at: row.get(7)?,
+                })
+            },
+        );
+
+        if let Ok(link) = existing {
+            return Ok(link);
+        }
+
+        let link_id = Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        conn.execute(
+            "INSERT INTO object_link (id, life_id, source_type, source_id, target_type, target_id, kind, created_at)
+             VALUES (?1, ?2, 'focus', ?3, 'essay', ?4, 'mount', ?5)",
+            params![link_id, life_id, focus_id, essay_id, now],
+        )?;
+
+        Ok(crate::models::ObjectLink {
+            id: link_id,
+            life_id: life_id.to_string(),
+            source_type: "focus".to_string(),
+            source_id: focus_id.to_string(),
+            target_type: "essay".to_string(),
+            target_id: essay_id.to_string(),
+            kind: "mount".to_string(),
+            created_at: now,
+        })
+    }
+
+    pub fn detach_essay_from_focus(
+        conn: &Connection,
+        life_id: &str,
+        focus_id: &str,
+        essay_id: &str,
+    ) -> Result<()> {
+        conn.execute(
+            "DELETE FROM object_link
+             WHERE life_id = ?1 AND source_type = 'focus' AND source_id = ?2 AND target_type = 'essay' AND target_id = ?3",
+            params![life_id, focus_id, essay_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_all_focus_essay_counts(
+        conn: &Connection,
+        life_id: &str,
+    ) -> Result<std::collections::HashMap<String, i64>> {
+        let mut stmt = conn.prepare(
+            "SELECT source_id, COUNT(*)
+             FROM object_link
+             WHERE life_id = ?1 AND source_type = 'focus' AND target_type = 'essay'
+             GROUP BY source_id",
+        )?;
+        let rows = stmt.query_map(params![life_id], |row| {
+            let focus_id: String = row.get(0)?;
+            let count: i64 = row.get(1)?;
+            Ok((focus_id, count))
+        })?;
+
+        let mut map = std::collections::HashMap::new();
+        for r in rows {
+            let (f_id, c) = r?;
+            map.insert(f_id, c);
+        }
+        Ok(map)
+    }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::migrations::run_migrations;
+
+    fn setup_test_db() -> Connection {
+        let mut conn = Connection::open_in_memory().unwrap();
+        run_migrations(&mut conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn test_focus_essay_mount_and_detach() {
+        let mut conn = setup_test_db();
+        let life_id = "test_life_1";
+        conn.execute(
+            "INSERT INTO life (id, name, created_at, updated_at) VALUES (?1, '测试人生', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+            params![life_id],
+        ).unwrap();
+
+        let focus = Repository::create_focus(
+            &mut conn,
+            life_id,
+            "战略研讨国策",
+            "推进战略",
+            None,
+            None,
+            "active",
+            100.0,
+            200.0,
+        ).unwrap();
+
+        let essay = Repository::create_essay(
+            &conn,
+            life_id,
+            "战略前瞻随笔",
+            "这是一篇前瞻性战术随笔...",
+        ).unwrap();
+
+        // 1. Initially no essays mounted
+        let mounted = Repository::get_focus_essays(&conn, life_id, &focus.id).unwrap();
+        assert_eq!(mounted.len(), 0);
+
+        // 2. Attach essay to focus
+        let link = Repository::attach_essay_to_focus(&conn, life_id, &focus.id, &essay.id).unwrap();
+        assert_eq!(link.source_id, focus.id);
+        assert_eq!(link.target_id, essay.id);
+
+        // Idempotent test (attaching again returns existing)
+        let link2 = Repository::attach_essay_to_focus(&conn, life_id, &focus.id, &essay.id).unwrap();
+        assert_eq!(link.id, link2.id);
+
+        // 3. Verify get_focus_essays returns the essay
+        let mounted = Repository::get_focus_essays(&conn, life_id, &focus.id).unwrap();
+        assert_eq!(mounted.len(), 1);
+        assert_eq!(mounted[0].id, essay.id);
+        assert_eq!(mounted[0].title, "战略前瞻随笔");
+
+        // 4. Verify counts map
+        let counts = Repository::get_all_focus_essay_counts(&conn, life_id).unwrap();
+        assert_eq!(counts.get(&focus.id), Some(&1));
+
+        // 5. Detach essay
+        Repository::detach_essay_from_focus(&conn, life_id, &focus.id, &essay.id).unwrap();
+        let mounted_after = Repository::get_focus_essays(&conn, life_id, &focus.id).unwrap();
+        assert_eq!(mounted_after.len(), 0);
+
+        let counts_after = Repository::get_all_focus_essay_counts(&conn, life_id).unwrap();
+        assert_eq!(counts_after.get(&focus.id), None);
+    }
+}
+

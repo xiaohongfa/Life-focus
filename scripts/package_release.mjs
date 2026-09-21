@@ -80,7 +80,8 @@ if not exist "%CURRENT_DIR%data" (
 
 :LAUNCH
 echo.
-echo [完成] 更新准备就绪！
+echo [准备就绪] 正在排查并清理残留进程...
+taskkill /f /im 人生战略游戏.exe >nul 2>nul
 echo 正在启动最新版本人生战略游戏...
 start "" "%TARGET_EXE%"
 exit /b 0
