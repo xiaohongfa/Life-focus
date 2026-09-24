@@ -67,7 +67,10 @@ pub fn copy_data_directory(source_dir: &Path, target_dir: &Path) -> std::io::Res
 pub fn try_auto_migrate_fresh_portable(target_data_dir: &Path) -> Option<PathBuf> {
     let target_db = target_data_dir.join("life_strategy.db");
     // Only auto-migrate if current target db does not exist or is empty (0 bytes)
-    let is_fresh = !target_db.exists() || fs::metadata(&target_db).map(|m| m.len() == 0).unwrap_or(false);
+    let is_fresh = !target_db.exists()
+        || fs::metadata(&target_db)
+            .map(|m| m.len() == 0)
+            .unwrap_or(false);
     if !is_fresh {
         return None;
     }
@@ -98,7 +101,7 @@ pub fn try_auto_migrate_fresh_portable(target_data_dir: &Path) -> Option<PathBuf
         }
 
         // Sort by most recently modified
-        candidates.sort_by(|a, b| b.1.cmp(&a.1));
+        candidates.sort_by_key(|a| std::cmp::Reverse(a.1));
 
         if let Some((best_source, _)) = candidates.first() {
             log::info!(
@@ -128,7 +131,10 @@ pub fn get_portable_status(state: State<'_, DbState>) -> Result<PortableStatus, 
     let has_llm_vault = data_dir.join(".llm_vault").exists();
 
     // Check if running in portable mode
-    let is_portable = data_dir.parent().map(|p| p.join("portable.flag").exists()).unwrap_or(false);
+    let is_portable = data_dir
+        .parent()
+        .map(|p| p.join("portable.flag").exists())
+        .unwrap_or(false);
 
     Ok(PortableStatus {
         is_portable,
@@ -140,7 +146,9 @@ pub fn get_portable_status(state: State<'_, DbState>) -> Result<PortableStatus, 
 }
 
 #[tauri::command]
-pub fn scan_portable_candidates(state: State<'_, DbState>) -> Result<Vec<PortableCandidate>, String> {
+pub fn scan_portable_candidates(
+    state: State<'_, DbState>,
+) -> Result<Vec<PortableCandidate>, String> {
     let mut list = Vec::new();
     let current_data_dir = &state.data_dir;
     let app_root = match current_data_dir.parent() {
@@ -171,7 +179,11 @@ pub fn scan_portable_candidates(state: State<'_, DbState>) -> Result<Vec<Portabl
                         .unwrap_or(0);
 
                     list.push(PortableCandidate {
-                        folder_name: path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                        folder_name: path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string(),
                         full_path: cand_data.display().to_string(),
                         db_path: cand_db.display().to_string(),
                         db_size_bytes: meta.len(),
@@ -183,7 +195,7 @@ pub fn scan_portable_candidates(state: State<'_, DbState>) -> Result<Vec<Portabl
     }
 
     // Sort by modified time descending
-    list.sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
+    list.sort_by_key(|a| std::cmp::Reverse(a.last_modified));
     Ok(list)
 }
 
@@ -218,7 +230,10 @@ pub fn migrate_portable_data(
 
     copy_data_directory(&src_db, &state.data_dir).map_err(map_err)?;
 
-    Ok("旧版便携数据（含数据库与本地密钥保险库）已成功无缝迁移！重启或刷新后即刻生效。".to_string())
+    Ok(
+        "旧版便携数据（含数据库与本地密钥保险库）已成功无缝迁移！重启或刷新后即刻生效。"
+            .to_string(),
+    )
 }
 
 #[cfg(test)]
@@ -255,10 +270,7 @@ mod tests {
             fs::read(dst_dir.join("life_strategy.db")).unwrap(),
             db_content
         );
-        assert_eq!(
-            fs::read(dst_dir.join(".llm_vault")).unwrap(),
-            vault_content
-        );
+        assert_eq!(fs::read(dst_dir.join(".llm_vault")).unwrap(), vault_content);
 
         // Check backup
         assert_eq!(

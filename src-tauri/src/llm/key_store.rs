@@ -358,12 +358,25 @@ mod tests {
 
     #[test]
     fn test_vault_persistence_across_reloads() {
-        let temp_dir = std::env::temp_dir().join(format!("lf_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "lf_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         let _ = fs::create_dir_all(&temp_dir);
 
         {
             let store = KeyStore::new(&temp_dir);
-            let view = store.save_config("deepseek".into(), "https://api.deepseek.com".into(), "deepseek-chat".into(), Some("sk-test-permanent-vault".into())).unwrap();
+            let view = store
+                .save_config(
+                    "deepseek".into(),
+                    "https://api.deepseek.com".into(),
+                    "deepseek-chat".into(),
+                    Some("sk-test-permanent-vault".into()),
+                )
+                .unwrap();
             assert!(view.has_api_key);
             assert_eq!(store.get_config().api_key, "sk-test-permanent-vault");
         }

@@ -672,14 +672,12 @@ mod tests {
             "active",
             100.0,
             200.0,
-        ).unwrap();
+        )
+        .unwrap();
 
-        let essay = Repository::create_essay(
-            &conn,
-            life_id,
-            "战略前瞻随笔",
-            "这是一篇前瞻性战术随笔...",
-        ).unwrap();
+        let essay =
+            Repository::create_essay(&conn, life_id, "战略前瞻随笔", "这是一篇前瞻性战术随笔...")
+                .unwrap();
 
         // 1. Initially no essays mounted
         let mounted = Repository::get_focus_essays(&conn, life_id, &focus.id).unwrap();
@@ -691,7 +689,8 @@ mod tests {
         assert_eq!(link.target_id, essay.id);
 
         // Idempotent test (attaching again returns existing)
-        let link2 = Repository::attach_essay_to_focus(&conn, life_id, &focus.id, &essay.id).unwrap();
+        let link2 =
+            Repository::attach_essay_to_focus(&conn, life_id, &focus.id, &essay.id).unwrap();
         assert_eq!(link.id, link2.id);
 
         // 3. Verify get_focus_essays returns the essay
@@ -713,4 +712,3 @@ mod tests {
         assert_eq!(counts_after.get(&focus.id), None);
     }
 }
-

@@ -250,4 +250,3 @@ pub fn get_all_focus_essay_counts(
     let conn = state.conn.lock().map_err(map_err)?;
     Repository::get_all_focus_essay_counts(&conn, &life_id).map_err(map_err)
 }
-
