@@ -111,7 +111,6 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
   const dragStartPosRef = useRef<{ id: string; x: number; y: number } | null>(null);
 
   // Focus & Canvas View refs (彻底消除重绘死锁与漂移)
-  const isInitialFitDoneRef = useRef(false);
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const subCountsRef = useRef<Record<string, { total: number; done: number }>>({});
 
@@ -377,13 +376,6 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
       syncNodesFromFoci(fociData, countsMap, essayCountsMap || {});
       syncEdgesFromRelations(relData);
 
-      // 仅在首次挂载且未居中过时执行一次 fitView，彻底避免拖拽中被动画打断和慢速漂移
-      if (fociData.length > 0 && !isInitialFitDoneRef.current) {
-        isInitialFitDoneRef.current = true;
-        setTimeout(() => {
-          reactFlowInstanceRef.current?.fitView({ padding: 0.3, maxZoom: 1.2, duration: 300 });
-        }, 100);
-      }
     } catch (err: unknown) {
       if (activeLifeIdRef.current === lifeId && loadSeqRef.current === currentSeq) {
         console.error('Failed to load focus canvas data', err);
@@ -394,7 +386,6 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
   }, [lifeId, syncNodesFromFoci, syncEdgesFromRelations, toast]);
 
   useEffect(() => {
-    isInitialFitDoneRef.current = false;
     setNodes([]);
     setEdges([]);
     setSelectedFocus(null);
@@ -1140,10 +1131,10 @@ export const FocusCanvasView: React.FC<FocusCanvasViewProps> = ({ lifeId }) => {
           <button
             onClick={() => reactFlowInstanceRef.current?.fitView({ padding: 0.3, maxZoom: 1.2, duration: 300 })}
             className="hoi4-btn-steel flex items-center space-x-1 px-2.5 py-1.5 rounded-sm text-xs font-semibold transition shadow-sm text-amber-300"
-            title="将所有国策自适应居中到视口中央"
+            title="点击后将全部国策缩放并居中到默认视图"
           >
             <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
-            <span>沙盘复位</span>
+            <span>默认视图</span>
           </button>
         </div>
       </div>

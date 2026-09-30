@@ -71,12 +71,12 @@ const statusConfig: Record<
     stampBadge: '达成',
   },
   paused: {
-    wreathColor: 'text-[#d97706]',
-    wreathGlow: 'drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]',
-    innerRing: 'border-amber-700/60 bg-[#1f1810]',
-    statusText: '⏳ 休整中',
-    statusColor: 'text-amber-500',
-    badgeBorder: 'border-amber-700/50',
+    wreathColor: 'text-[#60a5fa]',
+    wreathGlow: 'drop-shadow-[0_0_9px_rgba(96,165,250,0.7)]',
+    innerRing: 'border-sky-400 bg-[#102235]',
+    statusText: 'Ⅱ 暂时搁置',
+    statusColor: 'text-sky-300 font-bold',
+    badgeBorder: 'border-sky-400/90',
   },
   revoked: {
     wreathColor: 'text-[#71717a]',
@@ -103,29 +103,29 @@ const encounterStatusConfig: Record<
   }
 > = {
   active: {
-    wreathColor: 'text-[#f97316]',
-    wreathGlow: 'animate-radar-pulse drop-shadow-[0_0_12px_rgba(249,115,22,0.95)]',
-    innerRing: 'border-orange-500/90 bg-[#2b1408]',
-    statusText: '⚡ 突发遭遇',
-    statusColor: 'text-orange-400 font-black',
-    badgeBorder: 'border-orange-500/80',
+    wreathColor: 'text-[#f87171]',
+    wreathGlow: 'animate-radar-pulse drop-shadow-[0_0_16px_rgba(239,68,68,1)]',
+    innerRing: 'border-red-400 bg-[#3b090d] shadow-[0_0_12px_rgba(239,68,68,0.7)]',
+    statusText: '⚠ 遭遇未化解',
+    statusColor: 'text-red-300 font-black',
+    badgeBorder: 'border-red-400 shadow-[0_0_10px_rgba(239,68,68,0.7)]',
   },
   completed: {
     wreathColor: 'text-[#fbbf24]',
     wreathGlow: 'animate-golden-aura drop-shadow-[0_0_12px_rgba(245,158,11,0.85)]',
     innerRing: 'border-[#f59e0b] bg-[#291f0c]',
-    statusText: '★ 遭遇化解',
+    statusText: '✓ 遭遇已化解',
     statusColor: 'text-amber-300 font-bold',
     badgeBorder: 'border-[#d4af37]',
     stampBadge: '化解',
   },
   paused: {
-    wreathColor: 'text-[#d97706]',
-    wreathGlow: 'drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]',
-    innerRing: 'border-amber-700/60 bg-[#1f1810]',
-    statusText: '⏳ 暂缓处置',
-    statusColor: 'text-amber-500',
-    badgeBorder: 'border-amber-700/50',
+    wreathColor: 'text-[#60a5fa]',
+    wreathGlow: 'drop-shadow-[0_0_9px_rgba(96,165,250,0.7)]',
+    innerRing: 'border-sky-400 bg-[#102235]',
+    statusText: 'Ⅱ 暂缓处置',
+    statusColor: 'text-sky-300 font-bold',
+    badgeBorder: 'border-sky-400/90',
   },
   revoked: {
     wreathColor: 'text-[#71717a]',
@@ -166,7 +166,17 @@ export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
     <div
       onClick={handleClick}
       onMouseEnter={() => soundFx.playHover()}
-      className="relative flex flex-col items-center select-none cursor-pointer group transition duration-200 hover:scale-105"
+      className={`relative flex flex-col items-center select-none cursor-pointer group transition duration-200 hover:scale-105 ${
+        isEncounter && status === 'active'
+          ? 'drop-shadow-[0_0_10px_rgba(239,68,68,0.65)]'
+          : status === 'completed'
+          ? 'drop-shadow-[0_0_5px_rgba(245,158,11,0.25)]'
+          : status === 'active'
+          ? 'drop-shadow-[0_0_5px_rgba(34,197,94,0.22)]'
+          : status === 'paused'
+          ? 'drop-shadow-[0_0_7px_rgba(96,165,250,0.42)]'
+          : 'opacity-70 grayscale-[0.65]'
+      }`}
       style={{ width: 154 }}
     >
       {/* 1. HOI4 原生金色月桂冠大徽记 (Golden Laurel Wreath) */}
@@ -193,11 +203,22 @@ export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
               <stop offset="60%" stopColor="#6b7280" />
               <stop offset="100%" stopColor="#374151" />
             </linearGradient>
+            <linearGradient id={`blueGrad-${focus.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#dbeafe" />
+              <stop offset="55%" stopColor="#60a5fa" />
+              <stop offset="100%" stopColor="#1e3a8a" />
+            </linearGradient>
             <linearGradient id={`orangeGrad-${focus.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#fed7aa" />
               <stop offset="35%" stopColor="#f97316" />
               <stop offset="70%" stopColor="#ea580c" />
               <stop offset="100%" stopColor="#9a3412" />
+            </linearGradient>
+            <linearGradient id={`redGrad-${focus.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#fee2e2" />
+              <stop offset="35%" stopColor="#ef4444" />
+              <stop offset="70%" stopColor="#b91c1c" />
+              <stop offset="100%" stopColor="#450a0a" />
             </linearGradient>
           </defs>
 
@@ -207,8 +228,10 @@ export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
             fill={
               status === 'revoked'
                 ? `url(#ironGrad-${focus.id})`
-                : isEncounter
-                ? `url(#orangeGrad-${focus.id})`
+                : status === 'paused'
+                ? `url(#blueGrad-${focus.id})`
+                : isEncounter && status === 'active'
+                ? `url(#redGrad-${focus.id})`
                 : status === 'active'
                 ? `url(#emeraldGrad-${focus.id})`
                 : `url(#goldGrad-${focus.id})`
@@ -222,8 +245,10 @@ export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
             fill={
               status === 'revoked'
                 ? `url(#ironGrad-${focus.id})`
-                : isEncounter
-                ? `url(#orangeGrad-${focus.id})`
+                : status === 'paused'
+                ? `url(#blueGrad-${focus.id})`
+                : isEncounter && status === 'active'
+                ? `url(#redGrad-${focus.id})`
                 : status === 'active'
                 ? `url(#emeraldGrad-${focus.id})`
                 : `url(#goldGrad-${focus.id})`
@@ -243,8 +268,8 @@ export const FocusNode: React.FC<NodeProps> = memo(({ data }) => {
             className={`w-6 h-6 ${
               status === 'completed'
                 ? 'text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]'
-                : isEncounter
-                ? 'text-orange-400 drop-shadow-[0_0_8px_rgba(249,115,22,0.95)] animate-pulse'
+                : isEncounter && status === 'active'
+                ? 'text-red-200 drop-shadow-[0_0_10px_rgba(239,68,68,1)] animate-pulse'
                 : status === 'active'
                 ? 'text-emerald-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]'
                 : 'text-slate-300'
